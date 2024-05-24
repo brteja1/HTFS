@@ -20,8 +20,7 @@ if [ $retval -ne 1 ]; then
         if [ $retval -ne 1 ]; then
             # shellcheck disable=SC2116
             # shellcheck disable=SC2086
-            output="{$(echo $cdirtags)}"
-            #$(echo '{'$(echo $cdirtags | sed -n -e 'H;${x;s/\n/,/g;s/^,//;p;}' | sed -e 's/,/, /g' )'}')
+            output="{$(echo $cdirtags | sed 's/[[:space:]]\+/,/g' | sed -e 's/,/, /g')}"
         else
             output='{}'
         fi
@@ -35,7 +34,6 @@ if [ $retval -ne 1 ]; then
         fi
 
         cdir=$(dirname "$cdir")
-        
     done
 fi
 echo "$output"
