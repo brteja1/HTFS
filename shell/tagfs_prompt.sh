@@ -25,10 +25,12 @@ if [ $retval -ne 1 ]; then
             output='{}'
         fi
 
+        # we already found a subfolder that has tags
         if [ "$output" != "{}" ]; then
             break
         fi
-            
+        
+        # we only want to iterate till the folder where we initialized tagfs tracking
         if [ "$bdrdir" == "$curdir" ]; then
             break
         fi
