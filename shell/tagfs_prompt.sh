@@ -7,7 +7,8 @@ get_abs_path() {
 
 subst_comma_for_space() {
     args=("$@")
-    echo "$args" | sed 's/[[:space:]]\+/,/g' | sed -e 's/,/, /g'
+    output=$(echo $args | sed 's/[[:space:]]\+/,/g' | sed -e 's/,/, /g')
+    echo "$output"
 }
 
 get_dir_tags() {
@@ -16,8 +17,7 @@ get_dir_tags() {
     if [ $retval -ne 1 ]; then
         # shellcheck disable=SC2116
         # shellcheck disable=SC2086
-        #output="{$(echo $cdirtags | sed 's/[[:space:]]\+/,/g' | sed -e 's/,/, /g')}"
-        output="{$(subst_comma_for_space $cdirtags)}"
+        output="{$(subst_comma_for_space "$cdirtags")}"
     else
         output='{}'
     fi
