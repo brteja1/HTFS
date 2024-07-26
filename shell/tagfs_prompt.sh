@@ -65,7 +65,8 @@ if [ "$output" == "{}" ]; then
         done
     fi
     # shellcheck disable=SC2178
-    output=$(echo "$output" | sort | uniq)
+    output=( $output )
+    output=$(for a in "${output[@]}"; do echo "$a"; done | sort | uniq)
     output="{$(subst_comma_for_space "$output")}"
 fi
 echo "$output"
