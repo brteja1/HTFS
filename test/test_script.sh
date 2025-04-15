@@ -29,4 +29,5 @@ tagfs tagresource dir1/math.txt mathematics
 tagfs tagresource dir2/physics.txt physics
 tagfs tagresource dir2/quantummechanics.txt quantumphysics
 
+tagfs lsresources "calculus | (~(mathematics))"
 
