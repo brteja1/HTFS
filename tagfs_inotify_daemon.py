@@ -10,13 +10,28 @@ import TagfsUtilities
 logging.basicConfig(level='INFO')
 logobj = logging.getLogger(__name__)
 
-def _tagfs_track_resource_changes(tag_boundary_path) :
+def _tagfs_track_resource_changes(tag_boundary_path):
+    """
+    Track file system changes within the specified boundary path.
+    
+    Args:
+        tag_boundary_path (str): Path to monitor for changes
+        
+    Raises:
+        OSError: If inotify initialization fails
+    """    
     logobj.info("initializing inotify..")    
-    i = inotify.adapters.InotifyTree(tag_boundary_path)
+    try:
+        i = inotify.adapters.InotifyTree(tag_boundary_path)
+    except (PermissionError, OSError) as e:
+        logobj.error(f"Failed to initialize inotify: {e}")
+        sys.exit(1)    
     logobj.info("inode tracking on path: %s" % tag_boundary_path)
     th_utils = TagfsUtilities.TagfsTagHandlerUtilities(tag_boundary_path)
 
     eventlist = []
+    MOVED_FROM = 'MF'
+    MOVED_DIR = 'MD'
     for event in i.event_gen(yield_nones=False) :
         (ievent, type_names, path, filename) = event
         #print("type_names: " + str(type_names) + "path: " + path + " filname: " + filename)
@@ -27,9 +42,9 @@ def _tagfs_track_resource_changes(tag_boundary_path) :
                 tracked = th_utils.is_resource_tracked(originalpath)
                 if not tracked :
                     continue
-                eventlist.append((ievent.cookie, 'MF', originalpath))
+                eventlist.append((ievent.cookie, MOVED_FROM, originalpath))
             else :
-                eventlist.append((ievent.cookie, 'MD', originalpath))
+                eventlist.append((ievent.cookie, MOVED_DIR, originalpath))
         elif type_names.count('IN_MOVED_TO') :
             for e in eventlist :
                 event_cookie = e[0]
@@ -53,3 +68,4 @@ if __name__ == '__main__' :
         _tagfs_track_resource_changes(sys.argv[1])
     else :
         _tagfs_track_resource_changes(TagfsUtilities.get_tag_fs_boundary())
+    sys.exit(0)
