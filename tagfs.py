@@ -28,7 +28,7 @@ def _get_tag_fs_boundary() :
     print(tagfs_boundary)
     exit(0)
     
-def _init_tag_fs() :
+def _init_tag_fs(args) :
     TagHandler.TagHandler(TagfsUtilities._tagfsdb)
     logobj.info("initialized in " + os.path.realpath(os.curdir))
     if not os.path.exists(TagfsUtilities._tagfsdb) :
