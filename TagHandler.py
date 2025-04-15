@@ -3,6 +3,8 @@ import sqlite3
 import logging
 
 logobj = logging.getLogger(__name__)
+logobj.setLevel(logging.error)
+
 class TagHandler() :
     def __init__(self, tagdb_file):
         self.tagdb = tagdb_file
@@ -17,6 +19,8 @@ class TagHandler() :
         dbconn.execute('''CREATE TABLE TAGS
                         (ID INT PRIMARY KEY NOT NULL,
                         TAGNAME TEXT NOT NULL);''')
+        dbconn.execute('''CREATE INDEX TAGNAME_INDEX 
+                        ON TAGS(TAGNAME);''')
         dbconn.execute('''INSERT INTO TAGS
                         VALUES (0, 'dummy');''')
         dbconn.execute('''CREATE TABLE TAGLINKS
@@ -30,6 +34,8 @@ class TagHandler() :
         dbconn.execute('''CREATE TABLE RESOURCES
                         (ID INT PRIMARY KEY NOT NULL,
                         URL TEXT NOT NULL);''')
+        dbconn.execute('''CREATE INDEX URL_INDEX
+                        ON RESOURCES(URL);''')
         dbconn.execute('''INSERT INTO RESOURCES
                         VALUES (0,"dummy");''')
         dbconn.execute('''CREATE TABLE RESOURCELINKS
