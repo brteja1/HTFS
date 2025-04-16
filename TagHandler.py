@@ -176,7 +176,15 @@ class TagHandler() :
         downstream_tags = map(self.get_tag_name, downstream_tagids)
         return list(downstream_tags)
     
-    def get_tag_closure(self, tags) :
+    def get_tag_closure(self, tags: list[str]) -> list[str]:
+        """
+        Get all downstream tags for given tag list.
+        
+        Args:
+            tags: List of tag names
+        Returns:
+            List of all related tag names including input tags
+        """
         tags_closure = []
         for tag in tags :
             tagid = self.get_tag_id(tag)
@@ -189,7 +197,6 @@ class TagHandler() :
                 tags_closure.append(dtag)
         tags_closure = list(set(tags_closure))
         return tags_closure
-
     def add_resource(self, resource_url) :
         res = self.conn.execute("SELECT max(ID) FROM RESOURCES;")
         r = res.fetchone()
