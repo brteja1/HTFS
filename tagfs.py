@@ -254,7 +254,7 @@ def tagfs(arg):
     args = parser.parse_args(arg)    
     
     if not args.command or not args.command in COMMANDS :
-        improper_usage()        
+        improper_usage(args)        
     else:
         COMMANDS[args.command](args)
 
