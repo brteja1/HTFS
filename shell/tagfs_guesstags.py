@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+#pip install transformers
+#pip install torch
+
 import sys
 import os
 
