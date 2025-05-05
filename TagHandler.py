@@ -3,7 +3,7 @@ import sqlite3
 import logging
 
 logobj = logging.getLogger(__name__)
-logobj.setLevel(logging.error)
+#logobj.setLevel(logging.error)
 
 class TagHandler() :
     def __init__(self, tagdb_file):
