@@ -21,7 +21,7 @@ def get_tagfs_utils() :
     th_utils = TagfsUtilities.TagfsTagHandlerUtilities(tagfs_boundary)
     return th_utils
 
-def _get_tag_fs_boundary() :
+def _get_tag_fs_boundary(args) :
     tagfs_boundary = TagfsUtilities.get_tag_fs_boundary()
     if tagfs_boundary == None :
         improper_usage()

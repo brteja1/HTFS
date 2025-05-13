@@ -16,7 +16,7 @@ def normalize_url(resource_url) :
     normalized_url = normalized_url.replace("\\","/")
     return normalized_url
 
-def get_tag_fs_boundary(start_dir = os.path.realpath(os.curdir)) :
+def get_tag_fs_boundary(start_dir = '') :
     tag_fs_db_file = os.path.join(start_dir, _tagfsdb)
     tag_fs_db_file_path = start_dir
     while True :
