@@ -5,7 +5,7 @@ from functools import lru_cache
 
 # Implementation of shuning yard algorithm
 class QueryEvaluator:
-    OPERATORS = {'|': 0, '~': 0, '&': 1}
+    OPERATORS = {'|': 0, '~': 1, '&': 0}
     VALID_OPERATORS = set(['|', '&', '~'])
     LEFT_PAREN = '('
     RIGHT_PAREN = ')'
@@ -55,7 +55,56 @@ class QueryEvaluator:
                 stack.pop()
         return len(stack) == 0
 
+    def fully_parenthesize_expression(self, expression: str) -> str:
+        """Ensures the logical expression is fully parenthesized."""
+        tokens = self.tokenize(expression)
+        output = []
+        operators = []
+
+        for token in tokens:
+            if token not in QueryEvaluator.VALID_OPERATORS and token not in (QueryEvaluator.LEFT_PAREN, QueryEvaluator.RIGHT_PAREN):
+                output.append(token)
+            elif token == QueryEvaluator.LEFT_PAREN:
+                operators.append(token)
+            elif token == QueryEvaluator.RIGHT_PAREN:
+                while operators and operators[-1] != QueryEvaluator.LEFT_PAREN:
+                    op = operators.pop()
+                    if op == "~":
+                        operand = output.pop()
+                        output.append(f"({op}{operand})")
+                    else:
+                        right = output.pop()
+                        left = output.pop()
+                        output.append(f"({left} {op} {right})")
+                operators.pop()  # Remove the '('
+            else:  # Operator
+                while (operators and operators[-1] != QueryEvaluator.LEFT_PAREN and
+                       self.greater_precedence(operators[-1], token)):
+                    op = operators.pop()
+                    if op == "~":
+                        operand = output.pop()
+                        output.append(f"({op}{operand})")
+                    else:
+                        right = output.pop()
+                        left = output.pop()
+                        output.append(f"({left} {op} {right})")
+                operators.append(token)
+
+        while operators:
+            op = operators.pop()
+            if op == "~":   
+                operand = output.pop()
+                output.append(f"({op}{operand})")
+            else:
+                right = output.pop()
+                left = output.pop()
+                output.append(f"({left} {op} {right})")
+
+        print(output)
+        return output[0]
+
     def evaluate_query(self, expression):
+        expression = self.fully_parenthesize_expression(expression)  # Ensure full parenthesization
         assert(self.validate_expression(expression))
         tokens = self.tokenize(expression)
         self.values = []
