@@ -134,7 +134,7 @@ class TagfsTagHandlerUtilities :
         
     def get_resources_by_tag_expr(self, tagsexpr) :
         qe = QueryEvaluator.QueryEvaluator(self.th)
-        resource_urls = qe.evaluate_query(tagsexpr)
+        resource_urls = qe.evaluate(tagsexpr)
         resource_urls = list(map(full_url, resource_urls))
         return resource_urls
 
