@@ -2,8 +2,10 @@ import os
 import re
 import logging
 
-import TagHandler
+#import TagHandler
+
 import QueryEvaluator
+import TagService
 
 _tagfsdb = ".tagfs.db"
 
@@ -59,7 +61,7 @@ class TagfsTagHandlerUtilities :
     def __init__(self, tagfs_boundary) :
         self.tagfs_boundary = tagfs_boundary
         tagsdb_file_path = os.path.join(tagfs_boundary, _tagfsdb)
-        self.th = TagHandler.TagHandler(tagsdb_file_path)
+        self.th = TagService.TagService(tagsdb_file_path)
 
     def get_tags_list(self, tags) :
         taglist = []

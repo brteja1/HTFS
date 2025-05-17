@@ -1,4 +1,5 @@
 import TagHandler
+import TagService
 import re
 from functools import lru_cache
 
@@ -79,7 +80,7 @@ class Parser:
     
 # Implementation of shuning yard algorithm
 class ASTEvaluator:
-    def __init__(self, tag_handler : TagHandler.TagHandler):
+    def __init__(self, tag_handler : TagService.TagService):
         self.th = tag_handler
 
     def _eval(self, node : ASTNode) -> set:
@@ -111,7 +112,7 @@ class ASTEvaluator:
     def _get_tag_closure(self, tag : str) -> set:
         tag_closure = self.th.get_tag_closure([tag])
         tag_closure_ids = list(map(self.th.get_tag_id, tag_closure))
-        return set(self.th.get_resources_by_tag_id(tag_closure_ids))
+        return set(self.th.resource_repo.get_resources_by_tag_id(tag_closure_ids))
 
 # In your QueryEvaluator class, add a method to use the AST:
 class QueryEvaluator:
@@ -119,7 +120,7 @@ class QueryEvaluator:
     LEFT_PAREN = '('
     RIGHT_PAREN = ')'
 
-    def __init__(self, th: TagHandler.TagHandler):
+    def __init__(self, th: TagService.TagService):
         self.th = th
 
     def evaluate(self, expression : str) -> list:
