@@ -5,8 +5,8 @@ from functools import lru_cache
 
 # Implementation of shuning yard algorithm
 class QueryEvaluator:
-    OPERATORS = {'|': 0, '~': 1, '&': 0}
-    VALID_OPERATORS = set(['|', '&', '~'])
+    OPERATORSPRESIDENCE = {'|': 0, '~': 1, '&': 0}
+    VALID_OPERATORS = set(OPERATORSPRESIDENCE.keys())
     LEFT_PAREN = '('
     RIGHT_PAREN = ')'
 
@@ -41,7 +41,7 @@ class QueryEvaluator:
             self.values.append(self.fullresources.difference(v1))
 
     def greater_precedence(self, op1, op2) -> bool:
-        return QueryEvaluator.OPERATORS[op1] > QueryEvaluator.OPERATORS[op2]
+        return QueryEvaluator.OPERATORSPRESIDENCE[op1] > QueryEvaluator.OPERATORSPRESIDENCE[op2]
 
     def validate_expression(self, expression: str) -> bool:
         """Validates query expression for balanced parentheses and valid operators"""
