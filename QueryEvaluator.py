@@ -3,138 +3,130 @@ import re
 from functools import lru_cache
 
 
-# Implementation of shuning yard algorithm
-class QueryEvaluator:
-    OPERATORSPRESIDENCE = {'|': 0, '~': 1, '&': 0}
-    VALID_OPERATORS = set(OPERATORSPRESIDENCE.keys())
-    LEFT_PAREN = '('
-    RIGHT_PAREN = ')'
-
-    def __init__(self, th: TagHandler.TagHandler) :
-        self.th = th
-        self.operators = []
-        self.values = []
-        self.fullresources = []
-
-    def tokenize(self, querystr: str) -> list[str] :
+class Tokenizer:
+    @staticmethod
+    def tokenize(querystr: str) -> list[str] :
         tokens = re.findall("[()&|~]|[a-z0-9]+", querystr)
         return tokens
-
-    def peek(self) :
-        return self.operators[-1] if self.operators else None
-
-    def apply_operator(self) :
-        operator = self.operators.pop()
-        assert(operator in QueryEvaluator.VALID_OPERATORS)
-        if operator == "&" :
-            v1 = self.values.pop()
-            v2 = self.values.pop()
-            self.values.append(v1.intersection(v2))
-        elif operator == "|" :
-            v1 = self.values.pop()
-            v2 = self.values.pop()
-            self.values.append(v1.union(v2))
-        elif operator == "~" :
-            v1 = self.values.pop()
-            if len(self.fullresources) == 0 :
-                self.fullresources = set(self.th.get_resource_ids())
-            self.values.append(self.fullresources.difference(v1))
-
-    def greater_precedence(self, op1, op2) -> bool:
-        return QueryEvaluator.OPERATORSPRESIDENCE[op1] > QueryEvaluator.OPERATORSPRESIDENCE[op2]
-
-    def validate_expression(self, expression: str) -> bool:
-        """Validates query expression for balanced parentheses and valid operators"""
-        stack = []
-        for char in expression:
-            if char == self.LEFT_PAREN:
-                stack.append(char)
-            elif char == self.RIGHT_PAREN:
-                if not stack:
-                    return False
-                stack.pop()
-        return len(stack) == 0
-
-    def fully_parenthesize_expression(self, expression: str) -> str:
-        """Ensures the logical expression is fully parenthesized."""
-        tokens = self.tokenize(expression)
-        output = []
-        operators = []
-
-        for token in tokens:
-            if token not in QueryEvaluator.VALID_OPERATORS and token not in (QueryEvaluator.LEFT_PAREN, QueryEvaluator.RIGHT_PAREN):
-                output.append(token)
-            elif token == QueryEvaluator.LEFT_PAREN:
-                operators.append(token)
-            elif token == QueryEvaluator.RIGHT_PAREN:
-                while operators and operators[-1] != QueryEvaluator.LEFT_PAREN:
-                    op = operators.pop()
-                    if op == "~":
-                        operand = output.pop()
-                        output.append(f"({op}{operand})")
-                    else:
-                        right = output.pop()
-                        left = output.pop()
-                        output.append(f"({left} {op} {right})")
-                operators.pop()  # Remove the '('
-            else:  # Operator
-                while (operators and operators[-1] != QueryEvaluator.LEFT_PAREN and
-                       self.greater_precedence(operators[-1], token)):
-                    op = operators.pop()
-                    if op == "~":
-                        operand = output.pop()
-                        output.append(f"({op}{operand})")
-                    else:
-                        right = output.pop()
-                        left = output.pop()
-                        output.append(f"({left} {op} {right})")
-                operators.append(token)
-
-        while operators:
-            op = operators.pop()
-            if op == "~":   
-                operand = output.pop()
-                output.append(f"({op}{operand})")
-            else:
-                right = output.pop()
-                left = output.pop()
-                output.append(f"({left} {op} {right})")
-
-        print(output)
-        return output[0]
-
-    def evaluate_query(self, expression):
-        expression = self.fully_parenthesize_expression(expression)  # Ensure full parenthesization
-        assert(self.validate_expression(expression))
-        tokens = self.tokenize(expression)
-        self.values = []
-        self.operators = []
-        for token in tokens:
-            if token == QueryEvaluator.LEFT_PAREN:
-                self.operators.append(token)
-            elif token == QueryEvaluator.RIGHT_PAREN:
-                top = self.peek()
-                while top is not None and top != QueryEvaluator.LEFT_PAREN:
-                    self.apply_operator()
-                    top = self.peek()
-                self.operators.pop()  # Discard the '('
-            elif token[0] not in QueryEvaluator.VALID_OPERATORS:
-                r = self.get_tag_closure(token)
-                self.values.append(r)            
-            else:
-                # Operator
-                top = self.peek()
-                while top is not None and top != QueryEvaluator.LEFT_PAREN and self.greater_precedence(top, token):
-                    self.apply_operator()
-                    top = self.peek()
-                self.operators.append(token)
-        while self.peek() is not None:
-            self.apply_operator()
-        res = list(map(self.th.get_resource_url, self.values[0]))
-        return res
     
+class ASTNode:
+    def __init__(self, value, left=None, right=None):
+        self.value = value      # Operator or operand (e.g., '&', '|', '~', 'a')
+        self.left = left        # Left child (ASTNode or None)
+        self.right = right      # Right child (ASTNode or None)
+
+    def __repr__(self):
+        if self.value == '~':
+            return f"~({self.left})"
+        elif self.left and self.right:
+            return f"({self.left} {self.value} {self.right})"
+        else:
+            return str(self.value)
+
+class Parser:
+    def __init__(self, tokens, valid_operators, left_paren, right_paren):
+        self.tokens = tokens
+        self.pos = 0
+        self.valid_operators = valid_operators
+        self.LEFT_PAREN = left_paren
+        self.RIGHT_PAREN = right_paren
+
+    def parse(self):
+        return self.parse_or()
+
+    def parse_or(self):
+        node = self.parse_and()
+        while self._peek() == '|':
+            self._next()
+            node = ASTNode('|', node, self.parse_and())
+        return node
+
+    def parse_and(self):
+        node = self.parse_not()
+        while self._peek() == '&':
+            self._next()
+            node = ASTNode('&', node, self.parse_not())
+        return node
+
+    def parse_not(self):
+        if self._peek() == '~':
+            self._next()
+            return ASTNode('~', self.parse_not())
+        else:
+            return self.parse_atom()
+
+    def parse_atom(self):
+        tok = self._peek()
+        if tok == self.LEFT_PAREN:
+            self._next()
+            node = self.parse_or()
+            assert self._peek() == self.RIGHT_PAREN, "Mismatched parentheses"
+            self._next()
+            return node
+        elif tok is not None and tok not in self.valid_operators:
+            self._next()
+            return ASTNode(tok)
+        else:
+            raise ValueError(f"Unexpected token: {tok}")
+
+    def _peek(self):
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else None
+
+    def _next(self):
+        tok = self._peek()
+        self.pos += 1
+        return tok
+    
+# Implementation of shuning yard algorithm
+class ASTEvaluator:
+    def __init__(self, tag_handler : TagHandler.TagHandler):
+        self.th = tag_handler
+
+    def _eval(self, node : ASTNode) -> set:
+        if node is None:
+            return set()
+        if node.value == '&':
+            v1 = self._eval(node.left) 
+            v2 = self._eval(node.right)
+            return v1.intersection(v2)
+        elif node.value == '|':
+            v1 = self._eval(node.left) 
+            v2 = self._eval(node.right)
+            return v1.union(v2)
+        elif node.value == '~':
+            all_resources = set(self.th.get_resource_ids())
+            v1 = self._eval(node.left)
+            v = all_resources.difference(v1)
+            return v
+        else:
+            # Operand: tag name
+            return self._get_tag_closure(node.value)
+
+    def eval(self, node : ASTNode) -> list:
+        res = list(self._eval(node))
+        res = list(map(self.th.get_resource_url, res))
+        return res
+
     @lru_cache(maxsize=128)
-    def get_tag_closure(self, tag: str) -> set[str]:
+    def _get_tag_closure(self, tag : str) -> set:
         tag_closure = self.th.get_tag_closure([tag])
         tag_closure_ids = list(map(self.th.get_tag_id, tag_closure))
         return set(self.th.get_resources_by_tag_id(tag_closure_ids))
+
+# In your QueryEvaluator class, add a method to use the AST:
+class QueryEvaluator:
+    VALID_OPERATORS = set(['|', '&', '~'])
+    LEFT_PAREN = '('
+    RIGHT_PAREN = ')'
+
+    def __init__(self, th: TagHandler.TagHandler):
+        self.th = th
+
+    def evaluate(self, expression : str) -> list:
+        tokens = Tokenizer.tokenize(expression)
+        parser = Parser(tokens, QueryEvaluator.VALID_OPERATORS, QueryEvaluator.LEFT_PAREN, QueryEvaluator.RIGHT_PAREN)
+        ast = parser.parse()
+        # Evaluate the AST
+        evaluator = ASTEvaluator(self.th)
+        result_ids = evaluator.eval(ast)
+        return result_ids
