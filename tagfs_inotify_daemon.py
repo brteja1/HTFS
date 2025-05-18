@@ -32,7 +32,10 @@ class TagfsInotifyDaemon:
             for event in i.event_gen(yield_nones=False):
                 self.handle_event(event)
         except KeyboardInterrupt:
+            #remote inotify request
+            inotify.adapters.InotifyTree.close(i)
             logobj.info("Shutting down daemon gracefully.")
+    
 
     def handle_event(self, event):
         ievent, type_names, path, filename = event
