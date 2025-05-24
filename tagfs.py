@@ -6,7 +6,6 @@ import shutil
 import logging
 import argparse
 
-import TagHandler
 import TagfsUtilities
 
 logging.basicConfig(level='INFO')
@@ -14,6 +13,7 @@ logobj = logging.getLogger(__name__)
 
 def get_tagfs_utils() :
     tagfs_boundary = TagfsUtilities.get_tag_fs_boundary()
+
     if tagfs_boundary == None :
         logobj.error('db not initialized')
         print_usage([])
@@ -29,10 +29,12 @@ def _get_tag_fs_boundary(args) :
     exit(0)
     
 def _init_tag_fs(args) :
-    TagHandler.TagHandler(TagfsUtilities._tagfsdb)
-    logobj.info("initialized in " + os.path.realpath(os.curdir))
+    ts = TagfsUtilities.TagfsTagHandlerUtilities(os.path.realpath(os.curdir))
+    ts.th.initialize()
+    ts = None
     if not os.path.exists(TagfsUtilities._tagfsdb) :
-        exit(0)
+        exit(1)    
+    logobj.info("initialized in " + os.path.realpath(os.curdir))
     exit(0)
 
 def _get_tags_list(args) :
