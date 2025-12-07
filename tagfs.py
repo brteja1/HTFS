@@ -71,8 +71,14 @@ def _add_resource(args) :
 
 def _del_resource(args) :
     resource_url = args.path
+    make_fs_change = args.makefschange.lower() == 'true'
     th_utils = get_tagfs_utils()
     th_utils.del_resource(resource_url)
+    if make_fs_change :
+        if os.path.isfile(resource_url) :
+            os.remove(resource_url)
+        elif os.path.isdir(resource_url) :
+            shutil.rmtree(resource_url)
     exit(0)
 
 def _tag_resource(args) :
@@ -93,12 +99,14 @@ def _untag_resource(args) :
 def _move_resource(args) :
     resource_url = args.path
     target_url = args.newpath
+    make_fs_change = args.makefschange.lower() == 'true'
     # validate if target_url falls under the same tagfs hierarchy
     src_is_file = os.path.isfile(resource_url)
     target_is_dir = os.path.isdir(target_url)
     if target_is_dir & src_is_file :
         target_url = target_url + os.sep + os.path.basename(resource_url)
-    shutil.move(resource_url, target_url)
+    if make_fs_change :
+        shutil.move(resource_url, target_url)
     th_utils = get_tagfs_utils()
     th_utils.move_resource(resource_url, target_url)
     exit(0)
@@ -241,10 +249,12 @@ def create_parser():
     
     rmresource_parser = subparsers.add_parser('rmresource')
     rmresource_parser.add_argument('path')
+    rmresource_parser.add_argument('makefschange', nargs='?', default='true')
     
-    mvresource_parser = subparsers.add_parser('mvresource')
+    mvresource_parser = subparsers.add_parser('mvresource')    
     mvresource_parser.add_argument('path')
     mvresource_parser.add_argument('newpath')
+    mvresource_parser.add_argument('makefschange', nargs='?', default='true')
     
     sanitize_parser = subparsers.add_parser('sanitize')
     help_parser = subparsers.add_parser('help')
