@@ -13,88 +13,105 @@ logobj = logging.getLogger(__name__)
 
 def get_tagfs_utils() :
     tagfs_boundary = TagfsUtilities.get_tag_fs_boundary()
-
+    
     if tagfs_boundary == None :
         logobj.error('db not initialized')
         print_usage([])
-        exit(1)
+        return None
     th_utils = TagfsUtilities.TagfsTagHandlerUtilities(tagfs_boundary)
     return th_utils
 
 def _get_tag_fs_boundary(args) :
     tagfs_boundary = TagfsUtilities.get_tag_fs_boundary()
     if tagfs_boundary == None :
-        improper_usage()
+        logobj.error('db not initialized')
+        print_usage(args)
+        return 1
     print(tagfs_boundary)
-    exit(0)
+    return 0
     
 def _init_tag_fs(args) :
     ts = TagfsUtilities.TagfsTagHandlerUtilities(os.path.realpath(os.curdir))
     ts.th.initialize()
     ts = None
     if not os.path.exists(TagfsUtilities._tagfsdb) :
-        exit(1)    
+        return 1    
     logobj.info("initialized in " + os.path.realpath(os.curdir))
-    exit(0)
+    return 0
 
 def _get_tags_list(args) :
     tags = args.tags
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     tags_list = th_utils.get_tags_list(tags)
     for tag in tags_list :
         print(tag)
-    exit(0)
+    return 0
 
 def _add_tags(args) :
     tags = args.tags
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     new_tags = th_utils.add_tags(tags)
     if len(new_tags) > 0 :
         logobj.info("new tags added: " + str(new_tags))
-    exit(0)
+    return 0
 
 def _rename_tag(args) :
     old_tag_name = args.tag
     new_tag_name = args.newtag
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     res = th_utils.rename_tag(old_tag_name, new_tag_name)
     if not res :
         logobj.error("could not rename tags, check if tags are present in db")
-        exit(1)
-    exit(0)
+        return 1
+    return 0
             
 def _add_resource(args) :
     resource_url = args.path
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     th_utils.add_resource(resource_url)
-    exit(0)
+    return 0
 
 def _del_resource(args) :
     resource_url = args.path
     make_fs_change = args.makefschange.lower() == 'true'
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     th_utils.del_resource(resource_url)
     if make_fs_change :
         if os.path.isfile(resource_url) :
             os.remove(resource_url)
         elif os.path.isdir(resource_url) :
             shutil.rmtree(resource_url)
-    exit(0)
+    return 0
 
 def _tag_resource(args) :
     resource_url = args.path
     tags = args.tags
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     unsuccessful_tags = th_utils.tag_resource(resource_url, tags)
     if len(unsuccessful_tags) > 0 :
         logobj.warning("following tags not in db " + str(unsuccessful_tags))
-    exit(0)
+    return 0
 
 def _untag_resource(args) :
     resource_url = args.path
     tags = args.tags
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     th_utils.untag_resource(resource_url, tags)
+    return 0
 
 def _move_resource(args) :
     resource_url = args.path
@@ -108,50 +125,60 @@ def _move_resource(args) :
     if make_fs_change :
         shutil.move(resource_url, target_url)
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     th_utils.move_resource(resource_url, target_url)
-    exit(0)
+    return 0
     
 def _get_resources_by_tag_expr(args) :
     tagsexpr = args.tagexpr
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     resource_urls = th_utils.get_resources_by_tag_expr(tagsexpr)
     for res_url in resource_urls :
         print(res_url)
-    exit(0)
+    return 0
 
 def _link_tags(args) :
     tag = args.tag
     parent_tag = args.parenttag
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     res = th_utils.link_tags(tag, parent_tag)
     if not res :
         logobj.error("invalid tags used.")
-        exit(1)
-    exit(0)
+        return 1
+    return 0
 
 def _get_resource_tags(args) :
     resource_url = args.path
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     is_resource_tracked = th_utils.is_resource_tracked(resource_url)
     if not is_resource_tracked :
         logobj.error("resource not tracked")
-        exit(1)
+        return 1
     tags = th_utils.get_resource_tags(resource_url)
     for tag in tags :
         print(tag)
-    exit(0)
+    return 0
 
 def _rm_resource_tags(args) :
     resource_url = args.path
     th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
     is_resource_tracked = th_utils.is_resource_tracked(resource_url)
     if not is_resource_tracked :
         logobj.error("resource not tracked")
-        exit(1)
+        return 1
     tags = th_utils.get_resource_tags(resource_url)
     th_utils.untag_resource(resource_url, tags)
     logobj.info("removed tags" + str(tags) +  " on the resource")
-    exit(0)
+    return 0
 
 
 def print_usage(args):
@@ -171,15 +198,16 @@ def print_usage(args):
     print(cmd + " rmresourcetags path \t remove all tags on the resource")
     print(cmd + " rmresource path \t untrack the resource in the db")
     print(cmd + " mvresource path newpath\t move resource to a new path")
+    return 0
 
 def unimplemented_feature_error(args) :
     logobj.error("unimplemented feature")
-    exit(1)
+    return 1
 
 def improper_usage(args) :
     logobj.error("improper usage")
     print_usage(args)
-    exit(1)
+    return 1
 
 COMMANDS = {
     'init': _init_tag_fs,
@@ -266,9 +294,10 @@ def tagfs(arg):
     args = parser.parse_args(arg)    
     
     if not args.command or not args.command in COMMANDS :
-        improper_usage(args)        
+        code = improper_usage(args)        
     else:
-        COMMANDS[args.command](args)
+        code = COMMANDS[args.command](args)
+    sys.exit(code)
 
 if __name__ == "__main__":
     tagfs(sys.argv[1:])
