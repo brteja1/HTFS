@@ -83,7 +83,7 @@ tagfs addtags "Project/Alpha/Design" "Project/Alpha/Development"
 tagfs addresource /path/to/file.pdf
 
 # Assign tags to file
-tagfs tagresource /path/to/file.pdf Design "Project"
+tagfs tagresource /path/to/file.pdf Project
 
 # Query files by tags (boolean expressions with &, |, ~)
 tagfs lsresources "Project&Development"
