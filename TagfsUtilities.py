@@ -7,7 +7,7 @@ import logging
 import QueryEvaluator
 import TagService
 
-_tagfsdb = ".tagfs.db"
+_tagfsdb = ".tagfs.ttl"
 
 logging.basicConfig(level='INFO')
 logobj = logging.getLogger(__name__)

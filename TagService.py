@@ -1,17 +1,20 @@
-from TagHandler import DatabaseManager, TagRepository, ResourceRepository
+from RDFHandler import GraphManager, TagRepository, ResourceRepository
 
 class TagService:
     """
     High-level service to manage tags and resources using repositories.
     """
     def __init__(self, db_path):
-        self.db_manager = DatabaseManager(db_path)
-        self.db_manager.connect();
+        self.db_manager = GraphManager(db_path)
+        self.db_manager.connect()
         self.tag_repo = TagRepository(self.db_manager)
         self.resource_repo = ResourceRepository(self.db_manager)
 
     def __del__(self):
-        self.db_manager.close()
+        try:
+            self.db_manager.close()
+        except Exception:
+            pass
 
     def initialize(self):
         self.db_manager.initialize_schema()

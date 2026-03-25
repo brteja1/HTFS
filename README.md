@@ -31,5 +31,71 @@ HTFS stores tag metadata separately from the filesystem hierarchy, enabling:
 * Tagging large digital archives for better retrieval
 
 
+# Installation & Dependencies
+
+## Requirements
+
+### Core Dependencies
+- **Python** 3.7+
+- **rdflib** (>= 6.0) – RDF graph management and SPARQL query execution
+  ```bash
+  pip install rdflib
+  ```
+
+### Optional Dependencies
+- **inotify** – For automatic filesystem event tracking (Linux only)
+  ```bash
+  pip install inotify
+  ```
+
+## Setup
+
+1. Install core dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. (Optional) Install additional features:
+   ```bash
+   pip install -r requirements-optional.txt
+   ```
+   This enables the inotify daemon for automatic filesystem event tracking.
+
+3. Initialize a tagfs database in your desired directory:
+   ```bash
+   cd /path/to/your/data
+   tagfs init
+   ```
+   This creates a `.tagfs.ttl` file that stores all tag hierarchies and file associations in RDF format.
+
 # Usage
-tagfs help - will provide the details on how to use the utility.
+
+## Quick Start
+
+```bash
+# View available commands
+tagfs help
+
+# Create tags with hierarchy (using / as separator)
+tagfs addtags "Project/Alpha/Design" "Project/Alpha/Development"
+
+# Track a file
+tagfs addresource /path/to/file.pdf
+
+# Assign tags to file
+tagfs tagresource /path/to/file.pdf Design "Project"
+
+# Query files by tags (boolean expressions with &, |, ~)
+tagfs lsresources "Project&Development"
+tagfs lsresources "(Design|Development)&~Draft"
+
+# List tags on a resource
+tagfs getresourcetags /path/to/file.pdf
+```
+
+## Commands Reference
+
+For detailed command usage:
+```bash
+tagfs help
+```

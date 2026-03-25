@@ -1,7 +1,5 @@
-import TagHandler
 import TagService
 import re
-from functools import lru_cache
 
 
 class Tokenizer:
@@ -78,41 +76,50 @@ class Parser:
         self.pos += 1
         return tok
     
-# Implementation of shuning yard algorithm
+from RDFHandler import HTFS
+from rdflib.namespace import SKOS
+
 class ASTEvaluator:
-    def __init__(self, tag_handler : TagService.TagService):
+    """Compiles an AST into a single SPARQL query and executes it."""
+
+    def __init__(self, tag_handler: TagService.TagService):
         self.th = tag_handler
+        self.g = tag_handler.db_manager.graph
+        self._var_counter = 0
 
-    def _eval(self, node : ASTNode) -> set:
+    def _next_var(self):
+        self._var_counter += 1
+        return f"?tag{self._var_counter}"
+
+    def _compile(self, node: ASTNode) -> str:
         if node is None:
-            return set()
+            return ""
         if node.value == '&':
-            v1 = self._eval(node.left) 
-            v2 = self._eval(node.right)
-            return v1.intersection(v2)
+            return self._compile(node.left) + self._compile(node.right)
         elif node.value == '|':
-            v1 = self._eval(node.left) 
-            v2 = self._eval(node.right)
-            return v1.union(v2)
+            left = self._compile(node.left)
+            right = self._compile(node.right)
+            return f"{{ {left} }} UNION {{ {right} }}\n"
         elif node.value == '~':
-            all_resources = set(self.th.get_resource_ids())
-            v1 = self._eval(node.left)
-            v = all_resources.difference(v1)
-            return v
+            inner = self._compile(node.left)
+            return f"FILTER NOT EXISTS {{ {inner} }}\n"
         else:
-            # Operand: tag name
-            return self._get_tag_closure(node.value)
+            var = self._next_var()
+            tag_uri = f"htfs:tag_{node.value}"
+            return f"?resource htfs:hasTag {var} .\n{var} skos:broader* {tag_uri} .\n"
 
-    def eval(self, node : ASTNode) -> list:
-        res = list(self._eval(node))
-        res = list(map(self.th.get_resource_url, res))
-        return res
-
-    @lru_cache(maxsize=128)
-    def _get_tag_closure(self, tag : str) -> set:
-        tag_closure = self.th.get_tag_closure([tag])
-        tag_closure_ids = list(map(self.th.get_tag_id, tag_closure))
-        return set(self.th.resource_repo.get_resources_by_tag_id(tag_closure_ids))
+    def eval(self, node: ASTNode) -> list:
+        self._var_counter = 0
+        pattern = self._compile(node)
+        query = f"""
+        SELECT DISTINCT ?url WHERE {{
+            ?resource a htfs:Resource ;
+                      htfs:url ?url .
+            {pattern}
+        }}
+        """
+        results = self.g.query(query, initNs={"htfs": HTFS, "skos": SKOS})
+        return [str(row.url) for row in results]
 
 # In your QueryEvaluator class, add a method to use the AST:
 class QueryEvaluator:
