@@ -27,7 +27,6 @@ get_dir_tags() {
 bdry=$(tagfs getboundary 2>>/dev/null)
 retval=$?
 output='';
-echo "done1" $retval
 # try moving up to see if we get any folder with tags
 if [ $retval -ne 1 ]; then
     cdir=$(pwd)
