@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""One-time migration script: converts .tagfs.db (SQLite) to .tagfs.ttl (RDF/Turtle)."""
+"""One-time migration script: converts .tagfs.db (SQLite) to a minimal .tagfs.ttl."""
 
 import os
 import sys
 import sqlite3
-from rdflib import Graph, Namespace, Literal, RDF
-from rdflib.namespace import SKOS, XSD
+from rdflib import Graph, Namespace
+from rdflib.namespace import SKOS
 
 HTFS = Namespace("http://htfs.example.org/ontology#")
 
@@ -25,46 +25,25 @@ def migrate(db_path, ttl_path):
     # --- Tags ---
     cursor.execute("SELECT ID, TAGNAME FROM TAGS WHERE ID > 0;")
     tags = cursor.fetchall()
-    tag_id_to_name = {}
-    max_tag_id = 0
-    for tag_id, tag_name in tags:
-        tag_id_to_name[tag_id] = tag_name
-        tag_uri = HTFS[f"tag_{tag_name}"]
-        g.add((tag_uri, RDF.type, SKOS.Concept))
-        g.add((tag_uri, SKOS.prefLabel, Literal(tag_name)))
-        g.add((tag_uri, HTFS.id, Literal(tag_id, datatype=XSD.integer)))
-        max_tag_id = max(max_tag_id, tag_id)
+    tag_ids = {tag_id for tag_id, _ in tags}
 
     # --- Tag links ---
     cursor.execute("SELECT TAGID, TAGPARENTID FROM TAGLINKS WHERE TAGID > 0 AND TAGPARENTID > 0;")
     for child_id, parent_id in cursor.fetchall():
-        child_name = tag_id_to_name.get(child_id)
-        parent_name = tag_id_to_name.get(parent_id)
-        if child_name and parent_name:
-            g.add((HTFS[f"tag_{child_name}"], SKOS.broader, HTFS[f"tag_{parent_name}"]))
+        if child_id in tag_ids and parent_id in tag_ids:
+            g.add((HTFS[f"tag_{child_id}"], SKOS.broader, HTFS[f"tag_{parent_id}"]))
 
     # --- Resources ---
     cursor.execute("SELECT ID, URL FROM RESOURCES WHERE ID > 0;")
     resources = cursor.fetchall()
-    max_res_id = 0
-    for res_id, url in resources:
-        res_uri = HTFS[f"resource_{res_id}"]
-        g.add((res_uri, RDF.type, HTFS.Resource))
-        g.add((res_uri, HTFS.url, Literal(url)))
-        g.add((res_uri, HTFS.id, Literal(res_id, datatype=XSD.integer)))
-        max_res_id = max(max_res_id, res_id)
+    resource_ids = {res_id for res_id, _ in resources}
 
     # --- Resource-tag links ---
     cursor.execute("SELECT RESID, TAGID FROM RESOURCELINKS WHERE RESID > 0 AND TAGID > 0;")
     for res_id, tag_id in cursor.fetchall():
-        tag_name = tag_id_to_name.get(tag_id)
-        if tag_name:
+        if res_id in resource_ids and tag_id in tag_ids:
             res_uri = HTFS[f"resource_{res_id}"]
-            g.add((res_uri, HTFS.hasTag, HTFS[f"tag_{tag_name}"]))
-
-    # --- Metadata counters ---
-    g.add((HTFS.meta, HTFS.maxTagId, Literal(max_tag_id, datatype=XSD.integer)))
-    g.add((HTFS.meta, HTFS.maxResourceId, Literal(max_res_id, datatype=XSD.integer)))
+            g.add((res_uri, HTFS.hasTag, HTFS[f"tag_{tag_id}"]))
 
     conn.close()
 

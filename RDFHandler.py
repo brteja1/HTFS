@@ -1,7 +1,7 @@
 import os
 import logging
-from rdflib import Graph, Namespace, Literal, URIRef, RDF
-from rdflib.namespace import SKOS, XSD
+from rdflib import Graph, Namespace
+from rdflib.namespace import SKOS
 
 logobj = logging.getLogger(__name__)
 
@@ -263,17 +263,6 @@ class RDFHandler:
             res_uri = HTFS[f"resource_{row['RESID']}"]
             tag_uri = HTFS[f"tag_{row['TAGID']}"]
             graph.add((res_uri, HTFS.hasTag, tag_uri))
-
-        # Export metadata
-        cursor = conn.execute("SELECT MAX_ID FROM ID_SEQUENCES WHERE NAME='TAG';")
-        row = cursor.fetchone()
-        max_tag_id = row[0] if row else 0
-        cursor = conn.execute("SELECT MAX_ID FROM ID_SEQUENCES WHERE NAME='RESOURCE';")
-        row = cursor.fetchone()
-        max_res_id = row[0] if row else 0
-
-        graph.add((HTFS.meta, HTFS.maxTagId, Literal(max_tag_id, datatype=XSD.integer)))
-        graph.add((HTFS.meta, HTFS.maxResourceId, Literal(max_res_id, datatype=XSD.integer)))
 
         graph.serialize(destination=ttl_path, format="turtle")
         conn.close()
