@@ -157,7 +157,7 @@ The optional daemon monitors the tagfs boundary via `inotify.adapters.InotifyTre
 
 ### 7. **Data Migration (migrate_sql_to_rdf.py)**
 
-Rebuilds `.tagfs.ttl` from legacy SQLite tables (`TAGS`, `TAGLINKS`, `RESOURCES`, `RESOURCELINKS`) while preserving the `ID_SEQUENCES`. The migration inserts the same `skos:broader` and `htfs:hasTag` triples consumed by `RDFHandler`, ensuring the new split storage can be reconstructed from older exports.
+Rebuilds `.tagfs.ttl` from legacy SQLite tables (`TAGS`, `TAGLINKS`, `RESOURCES`, `RESOURCELINKS`) while preserving the `ID_SEQUENCES`. The migration emits the same minimal `skos:broader` and `htfs:hasTag` triples consumed by `RDFHandler`, ensuring the split storage can be reconstructed without duplicating tag names or resource URLs in RDF.
 ---
 
 ## Data Model & Ontology
@@ -168,31 +168,21 @@ Rebuilds `.tagfs.ttl` from legacy SQLite tables (`TAGS`, `TAGLINKS`, `RESOURCES`
 ```turtle
 @prefix htfs: <http://htfs.example.org/ontology#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
-@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 ```
-
-#### Classes:
-
-**skos:Concept** (from SKOS vocabulary)
-- Represents tags in a controlled vocabulary
-- Supports hierarchical relationships
-
-**htfs:Resource**
-- Represents tracked files and directories
-- Contains filesystem metadata
 
 #### Properties:
 
 | Property | Domain | Range | Purpose |
 |----------|--------|-------|---------|
-| `skos:prefLabel` | `skos:Concept` | `xsd:string` | Tag display name |
-| `skos:broader` | `skos:Concept` | `skos:Concept` | Parent tag (inverse: `skos:narrower`) |
-| `htfs:id` | `skos:Concept` ∪ `htfs:Resource` | `xsd:integer` | Numeric identifier |
-| `htfs:url` | `htfs:Resource` | `xsd:string` | Filesystem path (relative to boundary) |
-| `htfs:hasTag` | `htfs:Resource` | `skos:Concept` | Tag assignment |
-| `htfs:maxTagId` | `htfs:meta` | `xsd:integer` | Metadata: highest tag ID |
-| `htfs:maxResourceId` | `htfs:meta` | `xsd:integer` | Metadata: highest resource ID |
+| `skos:broader` | `htfs:tag_{id}` | `htfs:tag_{id}` | Parent tag relationship |
+| `htfs:hasTag` | `htfs:resource_{id}` | `htfs:tag_{id}` | Resource-tag assignment |
+
+#### URI Conventions
+
+- `htfs:tag_{id}` identifies a tag by its stable numeric ID
+- `htfs:resource_{id}` identifies a tracked resource by its stable numeric ID
+- Tag names and resource URLs are stored only in SQLite, not in RDF
+- RDF may omit isolated tags or untagged resources entirely; the graph only stores relationships
 
 ### Example RDF Graph
 
@@ -200,41 +190,18 @@ Rebuilds `.tagfs.ttl` from legacy SQLite tables (`TAGS`, `TAGLINKS`, `RESOURCES`
 @prefix htfs: <http://htfs.example.org/ontology#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 
-# Tags
-htfs:tag_Project a skos:Concept ;
-    skos:prefLabel "Project" ;
-    htfs:id 1 .
+htfs:tag_2 skos:broader htfs:tag_1 .
+htfs:tag_3 skos:broader htfs:tag_2 .
 
-htfs:tag_Alpha a skos:Concept ;
-    skos:prefLabel "Alpha" ;
-    skos:broader htfs:tag_Project ;
-    htfs:id 2 .
+htfs:resource_1 htfs:hasTag htfs:tag_3,
+        htfs:tag_4 .
 
-htfs:tag_Reports a skos:Concept ;
-    skos:prefLabel "Reports" ;
-    skos:broader htfs:tag_Alpha ;
-    htfs:id 3 .
-
-htfs:tag_Research a skos:Concept ;
-    skos:prefLabel "Research" ;
-    htfs:id 4 .
-
-# Resources
-htfs:resource_1 a htfs:Resource ;
-    htfs:url "reports/alpha_q1_2026.pdf" ;
-    htfs:id 1 ;
-    htfs:hasTag htfs:tag_Reports ;
-    htfs:hasTag htfs:tag_Research .
-
-htfs:resource_2 a htfs:Resource ;
-    htfs:url "reports/beta_draft.pdf" ;
-    htfs:id 2 ;
-    htfs:hasTag htfs:tag_Reports .
-
-# Metadata
-htfs:meta htfs:maxTagId 4 ;
-    htfs:maxResourceId 2 .
+htfs:resource_2 htfs:hasTag htfs:tag_3 .
 ```
+
+SQLite stores the corresponding lookup data:
+- `TAGS`: `1 -> Project`, `2 -> Alpha`, `3 -> Reports`, `4 -> Research`
+- `RESOURCES`: `1 -> reports/alpha_q1_2026.pdf`, `2 -> reports/beta_draft.pdf`
 
 ### Tag Hierarchy Semantics
 
@@ -365,13 +332,13 @@ proj1 proj2
 ```
 _compile(AST) emits clauses that match
 ├─ ?resource htfs:hasTag ?tag1 .
-│  ?tag1 skos:broader* htfs:tag_proj1 .
+│  ?tag1 skos:broader* htfs:tag_{proj1_id} .
 ├─ UNION { ?resource htfs:hasTag ?tag2 .
-│          ?tag2 skos:broader* htfs:tag_proj2 . }
+│          ?tag2 skos:broader* htfs:tag_{proj2_id} . }
 ├─ ?resource htfs:hasTag ?tag3 .
-│  ?tag3 skos:broader* htfs:tag_research .
+│  ?tag3 skos:broader* htfs:tag_{research_id} .
 └─ FILTER NOT EXISTS { ?resource htfs:hasTag ?tag4 .
-                       ?tag4 skos:broader* htfs:tag_draft . }
+                       ?tag4 skos:broader* htfs:tag_{draft_id} . }
 ```
 
 **Step 4: Query Execution**
@@ -388,8 +355,8 @@ RDFHandler executes the SPARQL against the in-memory graph and returns `htfs:res
 
 ### Physical Files
 
-- `.tagfs.db` (SQLite): Stores `TAGS (ID, TAGNAME)`, `RESOURCES (ID, URL)`, and `ID_SEQUENCES`. Every tag or resource name maps to a deterministic numeric ID, ensuring the RDF graph can refer to them without repeated lookups. This database supports fast name↔ID lookups, renames, and moves.
-- `.tagfs.ttl` (RDF/Turtle): Stores the semantic relationships (`skos:broader` for hierarchy, `htfs:hasTag` for resource assignments) between the numeric IDs as `htfs:tag_{id}` and `htfs:resource_{id}` URIs. The RDF graph is human-readable, Git-friendly, and compatible with `rdflib`.
+- `.tagfs.db` (SQLite): Stores `TAGS (ID, TAGNAME)`, `RESOURCES (ID, URL)`, and `ID_SEQUENCES`. Every tag or resource name maps to a deterministic numeric ID, and SQLite is the authoritative source for those names and URLs.
+- `.tagfs.ttl` (RDF/Turtle): Stores only the semantic relationships (`skos:broader` for hierarchy, `htfs:hasTag` for resource assignments) between numeric IDs as `htfs:tag_{id}` and `htfs:resource_{id}` URIs. The RDF graph is intentionally minimal and does not duplicate labels, paths, or ID counters.
 
 ### Serialization & Consistency
 
@@ -400,7 +367,8 @@ RDFHandler executes the SPARQL against the in-memory graph and returns `htfs:res
 ### Backup & Recovery
 
 - Version control both `.tagfs.db` and `.tagfs.ttl` together so the hybrid model can be restored.
-- Use `migrate_sql_to_rdf.py` if you need to rebuild RDF from SQLite snapshots or recover from corruption.
+- Use `migrate_sql_to_rdf.py` if you need to rebuild RDF from SQLite snapshots.
+- `migrate_rdf_to_split.py --rebuild` only works with legacy verbose RDF that still contains resource URLs and IDs. It will reject the current minimal RDF format because minimal RDF does not contain enough data to recreate the `RESOURCES` table.
 
 ---
 
@@ -628,7 +596,7 @@ mv /my/data/project_files/ /my/data/completed/project_files/
 
 **1. ID-based Lookups**:
 - Numeric IDs used internally for efficiency
-- SPARQL filters by `htfs:id` faster than string comparisons
+- SPARQL traverses compact `htfs:tag_{id}` and `htfs:resource_{id}` URIs instead of repeated string labels or file paths
 
 **2. SPARQL UNION Patterns**:
 - OR operations use UNION (standard SPARQL optimization)
@@ -762,18 +730,11 @@ The system balances **semantic richness** (RDF/SKOS ontology) with **practical u
 ### E. SPARQL Vocabulary Reference
 
 **SKOS (Simple Knowledge Organization System)**:
-- `skos:Concept`: Tagged concept/category
-- `skos:prefLabel`: Preferred display label
 - `skos:broader`: Parent concept
 - `skos:narrower`: Child concept (inverse)
 
 **HTFS Custom Vocabulary**:
-- `htfs:Resource`: Tracked file/directory
-- `htfs:id`: Numeric identifier
-- `htfs:url`: File path
 - `htfs:hasTag`: Tag assignment
-- `htfs:maxTagId`: Metadata counter
-- `htfs:maxResourceId`: Metadata counter
 
 ---
 
