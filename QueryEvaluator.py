@@ -1,13 +1,29 @@
-import TagService
+"""
+QueryEvaluator - Compiles tag expressions to SPARQL queries.
+
+Architecture:
+  - Tokenizer: Split expression into tokens
+  - Parser: Build AST with operator precedence
+  - ASTEvaluator: Compile AST to SPARQL and execute against RDF graph
+"""
+
 import re
+from RDFHandler import HTFS
+from rdflib.namespace import SKOS
+
+# Module-level constants for Parser
+VALID_OPERATORS = set(['|', '&', '~'])
+LEFT_PAREN = '('
+RIGHT_PAREN = ')'
 
 
 class Tokenizer:
     @staticmethod
-    def tokenize(querystr: str) -> list[str] :
-        tokens = re.findall("[()&|~]|[a-z0-9]+", querystr)
+    def tokenize(querystr: str) -> list[str]:
+        tokens = re.findall("[()&|~]|[a-zA-Z0-9]+", querystr)
         return tokens
-    
+
+
 class ASTNode:
     def __init__(self, value, left=None, right=None):
         self.value = value      # Operator or operand (e.g., '&', '|', '~', 'a')
@@ -22,13 +38,11 @@ class ASTNode:
         else:
             return str(self.value)
 
+
 class Parser:
-    def __init__(self, tokens, valid_operators, left_paren, right_paren):
+    def __init__(self, tokens):
         self.tokens = tokens
         self.pos = 0
-        self.valid_operators = valid_operators
-        self.LEFT_PAREN = left_paren
-        self.RIGHT_PAREN = right_paren
 
     def parse(self):
         return self.parse_or()
@@ -56,13 +70,13 @@ class Parser:
 
     def parse_atom(self):
         tok = self._peek()
-        if tok == self.LEFT_PAREN:
+        if tok == LEFT_PAREN:
             self._next()
             node = self.parse_or()
-            assert self._peek() == self.RIGHT_PAREN, "Mismatched parentheses"
+            assert self._peek() == RIGHT_PAREN, "Mismatched parentheses"
             self._next()
             return node
-        elif tok is not None and tok not in self.valid_operators:
+        elif tok is not None and tok not in VALID_OPERATORS:
             self._next()
             return ASTNode(tok)
         else:
@@ -75,21 +89,34 @@ class Parser:
         tok = self._peek()
         self.pos += 1
         return tok
-    
-from RDFHandler import HTFS
-from rdflib.namespace import SKOS
+
 
 class ASTEvaluator:
-    """Compiles an AST into a single SPARQL query and executes it."""
+    """
+    Compiles an AST into a single SPARQL query and executes it.
 
-    def __init__(self, tag_handler: TagService.TagService):
-        self.th = tag_handler
-        self.g = tag_handler.db_manager.graph
+    The TagService passed in must have a `db` attribute (DatabaseManager)
+    which has an `rdf` attribute (RDFHandler) with a `graph` attribute.
+    """
+
+    def __init__(self, tag_service):
+        self.th = tag_service
+        self.db = tag_service.db
+        # Ensure RDF is connected/loaded
+        self.db.rdf.connect()
+        self.g = self.db.rdf.graph
         self._var_counter = 0
 
     def _next_var(self):
         self._var_counter += 1
         return f"?tag{self._var_counter}"
+
+    def _resolve_tag_to_id(self, tag_name: str) -> str:
+        """Resolve a tag name to its RDF URI (htfs:tag_{id})."""
+        tag_id = self.db.get_tag_id(tag_name)
+        if tag_id < 0:
+            return None
+        return f"htfs:tag_{tag_id}"
 
     def _compile(self, node: ASTNode) -> str:
         if node is None:
@@ -104,37 +131,53 @@ class ASTEvaluator:
             inner = self._compile(node.left)
             return f"FILTER NOT EXISTS {{ {inner} }}\n"
         else:
+            tag_uri = self._resolve_tag_to_id(node.value)
+            if tag_uri is None:
+                # Tag doesn't exist; add a clause that filters out everything
+                return "FILTER(false)\n"
             var = self._next_var()
-            tag_uri = f"htfs:tag_{node.value}"
             return f"?resource htfs:hasTag {var} .\n{var} skos:broader* {tag_uri} .\n"
 
     def eval(self, node: ASTNode) -> list:
         self._var_counter = 0
         pattern = self._compile(node)
         query = f"""
-        SELECT DISTINCT ?url WHERE {{
-            ?resource a htfs:Resource ;
-                      htfs:url ?url .
+        SELECT DISTINCT ?resource WHERE {{
             {pattern}
         }}
         """
         results = self.g.query(query, initNs={"htfs": HTFS, "skos": SKOS})
-        return [str(row.url) for row in results]
+        resource_urls = []
+        seen = set()
+        for row in results:
+            resource_uri = str(row.resource)
+            try:
+                resource_id = int(resource_uri.split("_")[-1])
+            except (ValueError, IndexError):
+                continue
+            url = self.db.get_resource_url(resource_id)
+            if url and url not in seen:
+                seen.add(url)
+                resource_urls.append(url)
+        return resource_urls
 
-# In your QueryEvaluator class, add a method to use the AST:
+
 class QueryEvaluator:
-    VALID_OPERATORS = set(['|', '&', '~'])
-    LEFT_PAREN = '('
-    RIGHT_PAREN = ')'
+    """
+    Evaluate tag expressions against the RDF graph.
 
-    def __init__(self, th: TagService.TagService):
+    Usage:
+        qe = QueryEvaluator(tag_service)
+        results = qe.evaluate("(proj1|proj2)&research&~draft")
+    """
+
+    def __init__(self, th):
         self.th = th
 
-    def evaluate(self, expression : str) -> list:
+    def evaluate(self, expression: str) -> list:
         tokens = Tokenizer.tokenize(expression)
-        parser = Parser(tokens, QueryEvaluator.VALID_OPERATORS, QueryEvaluator.LEFT_PAREN, QueryEvaluator.RIGHT_PAREN)
+        parser = Parser(tokens)
         ast = parser.parse()
-        # Evaluate the AST
         evaluator = ASTEvaluator(self.th)
-        result_ids = evaluator.eval(ast)
-        return result_ids
+        result_urls = evaluator.eval(ast)
+        return result_urls

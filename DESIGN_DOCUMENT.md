@@ -2,8 +2,8 @@
 ## Technical Design Document
 
 **Version**: 1.0  
-**Date**: March 2026  
-**System**: HTFS-SPARQL - A Hierarchical Tag-driven File Organization System
+**Date**: 26 March 2026  
+**System**: HTFS - A Hierarchical Tag-driven File Organization System
 
 ---
 
@@ -31,7 +31,6 @@ HTFS is an innovative file organization system that decouples tagging from tradi
 - **Multi-tag Assignment**: Files and directories can have multiple tags across the hierarchy
 - **Transitive Queries**: Searching by parent tags automatically includes all children in results
 - **SPARQL-based Querying**: Complex tag expressions evaluated through RDF/SPARQL
-- **RDF Persistence**: All metadata stored in a single auxiliary `.tagfs.ttl` file in Turtle format
 - **CLI-driven Workflow**: Command-line interface for scripting and automation
 - **Filesystem Integration**: Optional inotify daemon for automatic resource tracking on changes
 
@@ -47,7 +46,7 @@ Unlike traditional folders (which form a strict tree hierarchy), HTFS tags form 
 ```
 ┌─────────────────────────────────────────────────────┐
 │                   CLI Layer (tagfs.py)              │
-│  Commands: init, lstags, addtags, linktags, etc.   │
+│  Commands: init, lstags, addtags, linktags, etc.    │
 └──────────────────┬──────────────────────────────────┘
                    │
 ┌──────────────────▼──────────────────────────────────┐
@@ -64,23 +63,21 @@ Unlike traditional folders (which form a strict tree hierarchy), HTFS tags form 
 │  TagService.py  │  │ QueryEvaluator.py       │
 │  • High-level   │  │ • AST Parser            │
 │    Tag/Resource │  │ • Query Compilation     │
-│    operations   │  │ • SPARQL Generation     │
+│    operations   │  │ • RDF/SPARQL bridge     │
 └───────┬─────────┘  └────────┬────────────────┘
         │                     │
         └──────────┬──────────┘
                    │
         ┌──────────▼──────────────────────┐
-        │   RDFHandler.py (Core Layer)    │
-        │  • GraphManager                 │
-        │  • TagRepository                │
-        │  • ResourceRepository           │
-        │  • SPARQL Execution             │
+        │DatabaseManager.py (Coordinator) │
+        │ • SQLiteHandler.py (tag/resource)│
+        │ • RDFHandler.py (tag/resource)   │
         └──────────┬───────────────────────┘
                    │
         ┌──────────▼──────────────────────┐
-        │   RDFLib Graph (in-memory)      │
-        │   ↓ Serialized to .tagfs.ttl    │
-        │   (Turtle Format on Disk)       │
+        │   Storage Layer                   │
+        │   • .tagfs.db (SQLite tables)     │
+        │   • .tagfs.ttl (RDF Turtle file)  │
         └─────────────────────────────────┘
 ```
 
@@ -99,18 +96,15 @@ TagfsUtilities.TagfsTagHandlerUtilities
   └→ Delegate to TagService
       ↓
     TagService
-      ├→ TagRepository (CRUD for tags)
-      │  └→ SPARQL queries on graph
-      ├→ ResourceRepository (CRUD for resources)
-      │  └→ SPARQL queries on graph
+      ├→ DatabaseManager (orchestrates storage)
+      │   ├→ SQLiteHandler (TAGS, RESOURCES, ID_SEQUENCES)
+      │   └→ RDFHandler (skos:broader + htfs:hasTag)
       └→ QueryEvaluator (for complex expressions)
-          └→ AST → SPARQL compilation
+          └→ AST → SPARQL compilation against RDF graph
           ↓
-      GraphManager
-      ├→ Load .tagfs.ttl into rdflib Graph
-      ├→ Execute SPARQL queries
-      ├→ Manage RDF triples
-      └→ Serialize & save changes
+      Query results map resource URIs → SQLite URLs
+      ↑
+      RDF graph loaded/written by RDFHandler
 ```
 
 ---
@@ -119,382 +113,51 @@ TagfsUtilities.TagfsTagHandlerUtilities
 
 ### 1. **CLI Layer (tagfs.py)**
 
-The command-line interface providing user-facing operations.
-
-#### Key Responsibilities:
-- Parse command-line arguments
-- Dispatch to appropriate handler functions
-- Provide help and usage information
-- Handle file system changes (optional)
-
-#### Command Categories:
-
-**Initialization**:
-- `init`: Initialize tagfs database in current directory
-
-**Tag Management**:
-- `lstags [tag]*`: List all tags or filter by patterns
-- `addtags tag1 tag2 ...`: Add new tags
-- `renametag tag newtag`: Rename existing tag
-- `linktags tag parenttag`: Create parent-child relationship
-- `unlinktags tag parenttag`: Remove relationship (unimplemented)
-
-**Resource Management**:
-- `addresource path`: Track a new file/directory
-- `rmresource path`: Untrack a resource
-- `mvresource path newpath`: Move tracked resource
-- `tagresource path tag1 tag2 ...`: Assign tags to resource
-- `untagresource path tag1 tag2 ...`: Remove tags from resource
-- `getresourcetags path`: List tags on a resource
-- `rmresourcetags path`: Remove all tags from a resource
-
-**Querying**:
-- `lsresources tagexpr`: Query resources using tag expressions (e.g., `(proj1|proj2)&research&~draft`)
-
-**System**:
-- `getboundary`: Return filesystem boundary (root where .tagfs.ttl exists)
-- `help`: Display usage information
-
-#### Implementation Pattern:
-```python
-def _handler_function(args):
-    th_utils = get_tagfs_utils()  # Get TagfsUtilities instance
-    # Perform operation
-    # Return exit code (0 = success, 1 = error)
-```
-
+The CLI exposes commands for initialization, tag/resource management, expression queries, and filesystem diagnostics. Each handler obtains a `TagfsTagHandlerUtilities` instance, normalizes paths, parses hierarchical inputs, and delegates the heavy work to `TagService`.
 ---
 
 ### 2. **Utilities Layer (TagfsUtilities.py)**
 
-Provides high-level abstractions and convenience functions.
-
-#### Key Class: `TagfsTagHandlerUtilities`
-
-**Responsibilities**:
-- Filesystem boundary detection
-- URL path normalization (relative to tagfs boundary)
-- Hierarchical tag parsing and processing
-- Convenience wrappers around TagService
-- Resource tracking validation
-
-#### Key Methods:
-
-| Method | Purpose |
-|--------|---------|
-| `get_tags_list(tags)` | List tags, optionally filtering by closure |
-| `add_tags(tags)` | Add tags with optional hierarchy (separated by `/`) |
-| `rename_tag(tag, new_tag)` | Rename tag while maintaining relationships |
-| `add_resource(path)` | Track new resource |
-| `tag_resource(path, tags)` | Assign tags to resource |
-| `get_resources_by_tag_expr(expr)` | Query resources using tag expressions |
-| `link_tags(tag, parent)` | Create hierarchical link |
-| `is_resource_tracked(path)` | Check if resource is in database |
-
-#### Hierarchical Tag Syntax:
-```
-addtags "Project/Alpha/Reports"
-```
-Creates tags: `Project`, `Alpha`, `Reports` with relationships:
-- `Alpha` has parent `Project`
-- `Reports` has parent `Alpha`
-
-#### URL Normalization:
-- Converts absolute filesystem paths to relative paths from tagfs boundary
-- Enables portability: .tagfs.ttl can move with its directory
-- Normalizes path separators to `/` for consistency across platforms
-
+`TagfsTagHandlerUtilities` maintains the tagfs boundary cache, normalizes resource URLs relative to that boundary, parses hierarchical tag syntax such as `Project/Alpha/Reports`, and exposes helpers like `add_tags`, `tag_resource`, `get_resources_by_tag_expr`, `link_tags`, and `is_resource_tracked`. It keeps the CLI boundary-aware while relying on `TagService` for persistence.
 ---
 
 ### 3. **High-Level Service Layer (TagService.py)**
 
-Provides a unified interface for tag and resource operations.
-
-#### Key Class: `TagService`
-
-**Initialization**:
-```python
-ts = TagService(db_path)  # .tagfs.ttl path
-ts.initialize()  # Create schema if needed
-```
-
-**Wraps Two Repository Objects**:
-1. `TagRepository`: Low-level tag operations
-2. `ResourceRepository`: Low-level resource operations
-
-#### Tag Operations:
-- `add_tag(tag_name)`: Create new tag
-- `rename_tag(tag_name, new_name)`: Rename tag
-- `link_tag(tag_name, parent_name)`: Create hierarchy link
-- `unlink_tag(tag_name, parent_name)`: Remove hierarchy link
-- `get_tag_id(tag_name)`: Retrieve numeric ID
-- `get_tag_name(tag_id)`: Retrieve name by ID
-- `get_tag_list()`: List all tags
-- `get_tag_closure(tags)`: Get tags plus all descendants
-
-#### Resource Operations:
-- `add_resource(url)`: Track new resource
-- `add_resource_tags(url, tags)`: Assign tags
-- `del_resource_tags(url, tags)`: Remove tags
-- `get_resource_tags(url)`: Retrieve tags on resource
-- `get_resources_by_tag(tags)`: Find resources with given tags
-- `update_resource_url(old_url, new_url)`: Move resource
-- `del_resource(url)`: Untrack resource
-
-#### Design Pattern:
-Acts as a **Facade** over the repository layer, providing a simpler interface for common operations.
-
+`TagService` is the facade used by CLI utilities. It instantiates `DatabaseManager`, exposes CRUD operations for tags and resources, auto-creates missing tags when adding resource tags, computes closures, and exposes `flush`/`close` to persist RDF only when needed.
 ---
 
-### 4. **RDF Layer (RDFHandler.py)**
+### 4. **Storage Coordinator & Handlers**
 
-Core persistence and semantic query engine.
+`DatabaseManager` orchestrates the SQLite and RDF storage layers. It initializes `.tagfs.db` (`TAGS`, `RESOURCES`, `ID_SEQUENCES`), routes identifier lookups to SQLite, and routes hierarchy/resource-tag management to `RDFHandler`. Bulk helpers such as `add_resource_tags`, `link_tag_to_parent`, and `get_resources_by_tag` combine lookups with RDF link creation, while `flush()`/`close()` serialize RDF only when modifications occur.
 
-#### Key Classes:
+#### SQLite Handler
 
-##### **GraphManager**
-Manages RDF graph lifecycle and serialization.
+- Maintains the relational tables: `TAGS (ID, TAGNAME)`, `RESOURCES (ID, URL)`, and `ID_SEQUENCES`
+- Ensures deterministic numeric identifiers for tags and resources so RDF URIs (`htfs:tag_{id}`, `htfs:resource_{id}`) stay stable
+- Provides fast helper methods for inserting, renaming, moving, and deleting entries
+- Exposes monotonic ID generation that keeps SQLite and RDF in sync
 
-**Design**:
-- Wraps `rdflib.Graph` for RDF operations
-- Handles `.tagfs.ttl` file I/O
-- One graph per database instance
+#### RDF Handler
 
-**Key Methods**:
-- `connect()`: Load graph from disk or create new
-- `close()`: Persist graph to disk
-- `initialize_schema()`: Set up metadata counters
-- Context manager support: `with GraphManager() as gm:`
-
-**Storage Format**: Turtle (`.ttl`)
-```turtle
-@prefix htfs: <http://htfs.example.org/ontology#> .
-@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
-
-htfs:tag_Project a skos:Concept ;
-    skos:prefLabel "Project" ;
-    htfs:id 1 .
-```
-
-**Metadata Reserved**:
-- `htfs:meta` - Reserved URI for schema metadata
-- `htfs:maxTagId` - Highest tag ID issued
-- `htfs:maxResourceId` - Highest resource ID issued
-
-##### **TagRepository**
-SPARQL-based tag CRUD operations.
-
-**Core Entities**:
-- **Tag URI**: `htfs:tag_{tag_name}` (unique identifier)
-- **Type**: `skos:Concept` (SKOS vocabulary)
-- **Properties**:
-  - `skos:prefLabel`: Display name
-  - `htfs:id`: Numeric ID (for efficiency)
-  - `skos:broader`: Parent tag relationship
-
-**Key Methods**:
-
-| Method | Implementation |
-|--------|-----------------|
-| `add_tag(name)` | Allocate ID, create RDF triples with type + label |
-| `get_tag_id(name)` | SPARQL query: find `htfs:id` by `skos:prefLabel` |
-| `get_tag_name(id)` | SPARQL query: find `skos:prefLabel` by `htfs:id` |
-| `link_tag(child, parent)` | Add triple: `child skos:broader parent` |
-| `get_downstream_tags(tag)` | SPARQL transitive closure: `skos:broader+` |
-| `get_tag_closure(tags)` | Expand tags with all descendants |
-
-**Tag Hierarchy SPARQL Example**:
-```sparql
-# Get all descendants of "Project" tag
-SELECT ?label WHERE {
-    ?descendant skos:broader+ htfs:tag_Project .
-    ?descendant skos:prefLabel ?label .
-}
-```
-
-##### **ResourceRepository**
-SPARQL-based resource CRUD operations.
-
-**Core Entities**:
-- **Resource URI**: `htfs:resource_{id}`
-- **Type**: `htfs:Resource`
-- **Properties**:
-  - `htfs:url`: File/directory path
-  - `htfs:id`: Numeric ID
-  - `htfs:hasTag`: Links to assigned tags
-
-**Key Methods**:
-
-| Method | Implementation |
-|--------|-----------------|
-| `add_resource(url)` | Allocate ID, create RDF triples |
-| `get_resource_id(url)` | SPARQL query: find `htfs:id` by `htfs:url` |
-| `add_resource_tags(url, tag_ids)` | Add multiple `htfs:hasTag` relationships |
-| `get_resources_by_tag_id(tag_ids)` | Query all resources with given tags |
-| `get_resource_ids_containing_url(prefix)` | SPARQL CONTAINS filter for directory moves |
-| `update_resource_sub_url(old, new)` | Regex-like replacement for directory renaming |
-
-**Resource Querying SPARQL Example**:
-```sparql
-# Get all resources tagged with "Project"
-SELECT ?url WHERE {
-    ?resource a htfs:Resource ;
-              htfs:url ?url ;
-              htfs:hasTag ?tag .
-    ?tag skos:broader* htfs:tag_Project .
-}
-```
-
+- Stores hierarchical relationships (`skos:broader`) and resource assignments (`htfs:hasTag`) in `.tagfs.ttl`
+- Lazily loads the `rdflib.Graph`, tracks a dirty flag, and serializes only on demand
+- Provides helpers like `add_tag_link`, `remove_tag_link`, `get_tag_closure_ids`, `add_resource_tag_link`, and `get_resources_by_tag_ids`
+- QueryEvaluator executes SPARQL on this graph and maps each `htfs:resource_{id}` URI back to SQLite for the final normalized URL list
 ---
 
 ### 5. **Query Engine (QueryEvaluator.py)**
 
-Compiles user-friendly tag expressions into executable SPARQL queries.
-
-#### Components:
-
-##### **Tokenizer**
-Converts string expressions into tokens.
-
-**Token Types**:
-- Operators: `&` (AND), `|` (OR), `~` (NOT)
-- Grouping: `(`, `)`
-- Operands: Tag names (alphanumeric)
-
-**Example**:
-```
-Input:  "(proj1|proj2)&research&~draft"
-Tokens: ['(', 'proj1', '|', 'proj2', ')', '&', 'research', '&', '~', 'draft']
-```
-
-##### **Parser**
-Builds Abstract Syntax Tree (AST) using operator precedence.
-
-**Operator Precedence** (lowest to highest):
-1. OR (`|`)
-2. AND (`&`)
-3. NOT (`~`)
-4. Atoms (parenthesized expressions, tag names)
-
-**Example AST**:
-```
-Expression: "(proj1|proj2)&research&~draft"
-
-        &
-       / \
-      &   ~
-     / \   \
-    |   research  draft
-   / \
-proj1 proj2
-```
-
-##### **ASTEvaluator**
-Compiles AST into single SPARQL query.
-
-**Compilation Strategy**:
-
-1. **Operand (`tag`)**: 
-   ```sparql
-   ?resource htfs:hasTag ?tag1 .
-   ?tag1 skos:broader* htfs:tag_projname .
-   ```
-
-2. **AND (`&`)**:
-   Concatenate pattern clauses (implicit AND)
-
-3. **OR (`|`)**:
-   ```sparql
-   { pattern1 } UNION { pattern2 }
-   ```
-
-4. **NOT (`~`)**:
-   ```sparql
-   FILTER NOT EXISTS { pattern }
-   ```
-
-**Example SPARQL Output**:
-```sparql
-SELECT DISTINCT ?url WHERE {
-    ?resource a htfs:Resource ;
-              htfs:url ?url .
-    
-    # AND clause 1: ?resource has tag proj1 or proj2
-    { 
-        ?resource htfs:hasTag ?tag1 .
-        ?tag1 skos:broader* htfs:tag_proj1 .
-    } UNION {
-        ?resource htfs:hasTag ?tag2 .
-        ?tag2 skos:broader* htfs:tag_proj2 .
-    }
-    
-    # AND clause 2: ?resource has tag research
-    ?resource htfs:hasTag ?tag3 .
-    ?tag3 skos:broader* htfs:tag_research .
-    
-    # AND clause 3: NOT draft
-    FILTER NOT EXISTS {
-        ?resource htfs:hasTag ?tag4 .
-        ?tag4 skos:broader* htfs:tag_draft .
-    }
-}
-```
-
+Tokenizes tag expressions, builds an AST, and compiles SPARQL clauses that traverse `htfs:hasTag` and `skos:broader*`. After the RDF query returns `htfs:resource_{id}` URIs, the ASTEvaluator extracts each numeric ID and asks SQLite for the normalized URL list so the CLI receives filesystem paths instead of RDF resources.
 ---
 
 ### 6. **Filesystem Integration (tagfs_inotify_daemon.py)**
 
-Optional daemon for automatic resource tracking on filesystem changes.
-
-#### Key Class: `TagfsInotifyDaemon`
-
-**Purpose**: Monitor filesystem for moves/renames and update metadata automatically.
-
-**Dependencies**: `inotify` (Linux only)
-
-**Supported Events**:
-- `IN_MOVED_FROM`: File/directory started moving
-- `IN_MOVED_TO`: File/directory completed move
-- `IN_ISDIR`: Event target is a directory
-
-**Implementation**:
-- Uses `inotify.adapters.InotifyTree` to watch tagfs boundary
-- Maintains event queue indexed by inotify cookie
-- On `MOVED_FROM`: Record original path
-- On `MOVED_TO`: Match cookie and update resource URL
-
-**Operations**:
-- **File Move**: Update single resource URL
-- **Directory Move**: Update all resources with matching URL prefix
-
-**Example Event Handling**:
-```
-MOVED_FROM: /data/project1/doc.pdf (cookie=12345)
-    ↓ Store in event queue
-MOVED_TO: /data/project2/doc.pdf (cookie=12345)
-    ↓ Match cookie, retrieve original
-    ↓ th_utils.move_resource("/data/project1/doc.pdf", "/data/project2/doc.pdf")
-```
-
+The optional daemon monitors the tagfs boundary via `inotify.adapters.InotifyTree`. It captures `IN_MOVED_FROM`/`IN_MOVED_TO` pairs, uses `TagfsUtilities.move_resource()` to normalize the paths, and relies on `TagService` to update SQLite/RDF so resource IDs and their tag links follow the filesystem move.
 ---
 
 ### 7. **Data Migration (migrate_sql_to_rdf.py)**
 
-One-time migration utility from SQLite to RDF format.
-
-#### Legacy Schema Mapping:
-- `TAGS.ID` & `TAGS.TAGNAME` → `skos:Concept` with `skos:prefLabel`
-- `TAGLINKS.TAGID/TAGPARENTID` → `skos:broader` relationship
-- `RESOURCES.ID` & `RESOURCES.URL` → `htfs:Resource` with `htfs:url`
-- `RESOURCELINKS.RESID/TAGID` → `htfs:hasTag` relationship
-
-#### Process:
-1. Read SQLite database
-2. Create RDF graph with HTFS/SKOS namespaces
-3. Transform each table into RDF triples
-4. Preserve ID sequences in metadata
-5. Serialize to Turtle format
-
+Rebuilds `.tagfs.ttl` from legacy SQLite tables (`TAGS`, `TAGLINKS`, `RESOURCES`, `RESOURCELINKS`) while preserving the `ID_SEQUENCES`. The migration inserts the same `skos:broader` and `htfs:hasTag` triples consumed by `RDFHandler`, ensuring the new split storage can be reconstructed from older exports.
 ---
 
 ## Data Model & Ontology
@@ -700,7 +363,7 @@ proj1 proj2
 
 **Step 3: SPARQL Compilation** (QueryEvaluator.ASTEvaluator)
 ```
-_compile(AST) generates:
+_compile(AST) emits clauses that match
 ├─ ?resource htfs:hasTag ?tag1 .
 │  ?tag1 skos:broader* htfs:tag_proj1 .
 ├─ UNION { ?resource htfs:hasTag ?tag2 .
@@ -711,80 +374,33 @@ _compile(AST) generates:
                        ?tag4 skos:broader* htfs:tag_draft . }
 ```
 
-**Step 4: Query Execution** (GraphManager)
-```sparql
-SELECT DISTINCT ?url WHERE {
-    ?resource a htfs:Resource ;
-              htfs:url ?url .
-    
-    { ?resource htfs:hasTag ?tag1 .
-      ?tag1 skos:broader* htfs:tag_proj1 . }
-    UNION
-    { ?resource htfs:hasTag ?tag2 .
-      ?tag2 skos:broader* htfs:tag_proj2 . }
-    
-    ?resource htfs:hasTag ?tag3 .
-    ?tag3 skos:broader* htfs:tag_research .
-    
-    FILTER NOT EXISTS {
-        ?resource htfs:hasTag ?tag4 .
-        ?tag4 skos:broader* htfs:tag_draft .
-    }
-}
-```
+**Step 4: Query Execution**
+RDFHandler executes the SPARQL against the in-memory graph and returns `htfs:resource_{id}` URIs. ASTEvaluator extracts the numeric IDs and queries SQLite (`DatabaseManager`) to fetch the normalized `URL` strings.
 
 **Step 5: Result Processing** (TagfsUtilities)
-- Convert relative URLs to absolute paths
+- Convert normalized URLs to absolute paths
 - Apply tagfs boundary
-- Return filesystem paths
+- Return filesystem paths to the CLI caller
 
 ---
 
 ## Storage & Persistence
 
-### File Format: Turtle (RDF/Turtle)
+### Physical Files
 
-**Location**: `.tagfs.ttl` in tagfs boundary directory
+- `.tagfs.db` (SQLite): Stores `TAGS (ID, TAGNAME)`, `RESOURCES (ID, URL)`, and `ID_SEQUENCES`. Every tag or resource name maps to a deterministic numeric ID, ensuring the RDF graph can refer to them without repeated lookups. This database supports fast name↔ID lookups, renames, and moves.
+- `.tagfs.ttl` (RDF/Turtle): Stores the semantic relationships (`skos:broader` for hierarchy, `htfs:hasTag` for resource assignments) between the numeric IDs as `htfs:tag_{id}` and `htfs:resource_{id}` URIs. The RDF graph is human-readable, Git-friendly, and compatible with `rdflib`.
 
-**Advantages**:
-- Human-readable text format
-- Supports RDF semantics natively
-- Direct compatibility with rdflib
-- Easily Git-tracked (text-based)
+### Serialization & Consistency
 
-### Serialization
-
-**GraphManager._save()**:
-```python
-def _save(self):
-    if self.graph is not None:
-        self.graph.serialize(destination=self.ttl_path, format="turtle")
-```
-
-**When Triggered**:
-- After tag creation, linking, or renaming
-- After resource creation, deletion, or URL update
-- After resource-tag relationship changes
-- Explicit `close()` call
-
-### Data Integrity
-
-**Atomic Operations**:
-- Each repository method loads graph, modifies, saves atomically
-- Graph modifications queued in memory
-- Serialized when `_save()` called
-
-**Consistency**:
-- ID counters (`maxTagId`, `maxResourceId`) prevent collisions
-- SPARQL queries ensure referential integrity
-- RDF format prevents unknown properties
+- `RDFHandler` lazily loads `.tagfs.ttl`, marks the graph dirty on mutations, and serializes only during `close()`/`flush()` or when explicitly triggered. SQLite commits immediately, while RDF writes are batched for performance.
+- `ID_SEQUENCES` in SQLite guarantee that tag/resource IDs never collide, even when migration scripts rebuild the RDF graph from scratch.
+- The split model keeps high-throughput lookups in SQL and relationship/closure logic in RDF, avoiding large graphs by only storing links instead of repeated metadata.
 
 ### Backup & Recovery
 
-**Recommendations**:
-- Version control `.tagfs.ttl` with Git
-- Backup before major operations
-- Original SQLite `.tagfs.db` preserved for migration reference
+- Version control both `.tagfs.db` and `.tagfs.ttl` together so the hybrid model can be restored.
+- Use `migrate_sql_to_rdf.py` if you need to rebuild RDF from SQLite snapshots or recover from corruption.
 
 ---
 
@@ -792,34 +408,29 @@ def _save(self):
 
 ### 1. **Repository Pattern**
 
-**Implementation**: TagRepository, ResourceRepository
+**Implementation**: SQLiteHandler + RDFHandler coordinated by DatabaseManager
 
-**Benefit**: Abstracts RDF/SPARQL details from business logic
+**Benefit**: Splits fast name↔ID lookups (SQLite) from graph relationships (RDF) while exposing a unified API.
 
 **Structure**:
 ```python
-class TagRepository:
-    def __init__(self, graph_manager):
-        self.gm = graph_manager
-        self.g = graph_manager.graph
-    
-    def add_tag(self, tag_name):
-        # SPARQL + RDF operations
-        self._save()
+class DatabaseManager:
+    def __init__(self, boundary):
+        self.sqlite = SQLiteHandler(...)
+        self.rdf = RDFHandler(...)
 ```
 
 ### 2. **Facade Pattern**
 
 **Implementation**: TagService
 
-**Benefit**: Simplifies API by combining multiple repositories
+**Benefit**: Simplifies API by combining the storage and query layers behind `DatabaseManager`.
 
 ```python
 class TagService:
-    def __init__(self, db_path):
-        self.db_manager = GraphManager(db_path)
-        self.tag_repo = TagRepository(self.db_manager)
-        self.resource_repo = ResourceRepository(self.db_manager)
+    def __init__(self, boundary):
+        self.db = DatabaseManager(boundary)
+        self.db.connect()
 ```
 
 ### 3. **Compiler Pattern**
@@ -863,15 +474,14 @@ FileSystem Events → Inotify → Event Queue → Handler → TagfsUtilities
 
 ### 6. **Context Manager Pattern**
 
-**Implementation**: GraphManager
+**Implementation**: DatabaseManager / RDFHandler
 
-**Benefit**: Automatic resource cleanup
+**Benefit**: Automatic connection lifecycle management and RDF serialization.
 
 ```python
-with GraphManager(db_path) as gm:
-    gm.connect()
-    # Use graph
-    gm.close()  # Automatic on exit
+with DatabaseManager(boundary) as db:
+    db.add_resource("/data/file")
+    db.flush()
 ```
 
 ---
