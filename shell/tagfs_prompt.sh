@@ -27,6 +27,7 @@ get_dir_tags() {
 bdry=$(tagfs getboundary 2>>/dev/null)
 retval=$?
 output='';
+echo "done1" $retval
 # try moving up to see if we get any folder with tags
 if [ $retval -ne 1 ]; then
     cdir=$(pwd)
@@ -49,6 +50,7 @@ if [ $retval -ne 1 ]; then
         cdir=$(dirname "$cdir")
     done
 fi
+
 
 # try looking at all files and see if any of them has tags
 # need to make this logic more smarter by merging some flags based on tag graph
