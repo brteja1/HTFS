@@ -228,6 +228,11 @@ class DatabaseManager:
             return tag_names  # All unsuccessful
 
         for tag_name in tag_names:
+            if "/" in tag_name:
+                logobj.error("hierarchical tag paths are not allowed when tagging resources: %s", tag_name)
+                unsuccessful.append(tag_name)
+                continue
+
             tag_id = self.get_tag_id(tag_name)
             if tag_id < 0:
                 # Auto-create the tag
