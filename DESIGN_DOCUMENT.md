@@ -45,22 +45,22 @@ Unlike traditional folders (which form a strict tree hierarchy), HTFS tags form 
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   CLI Layer (tagfs.py)              │
+│                   CLI Layer (htfs/cli.py)           │
 │  Commands: init, lstags, addtags, linktags, etc.    │
 └──────────────────┬──────────────────────────────────┘
                    │
 ┌──────────────────▼──────────────────────────────────┐
-│           Utilities Layer (TagfsUtilities.py)       │
+│           Library Core Layer (htfs/core.py)         │
+│  • Main API wrapper (HTFS class)                    │
 │  • Hierarchical tag handling                        │
 │  • Resource normalization & management              │
-│  • Tag expression evaluation                        │
 │  • Filesystem boundary detection                    │
 └──────────────────┬──────────────────────────────────┘
                    │
         ┌──────────┴──────────┐
         │                     │
 ┌───────▼─────────┐  ┌────────▼────────────────┐
-│  TagService.py  │  │ QueryEvaluator.py       │
+│ htfs/tag_service│  │ htfs/query_evaluator    │
 │  • High-level   │  │ • AST Parser            │
 │    Tag/Resource │  │ • Query Compilation     │
 │    operations   │  │ • RDF/SPARQL bridge     │
@@ -86,11 +86,11 @@ Unlike traditional folders (which form a strict tree hierarchy), HTFS tags form 
 ```
 User
   ↓
-CLI Parser (tagfs.py)
+CLI Parser (htfs/cli.py)
   ↓
 Handler Functions (_add_tags, _tag_resource, etc.)
   ↓
-TagfsUtilities.TagfsTagHandlerUtilities
+HTFS Library Core (htfs/core.py)
   ├→ Normalize URL paths
   ├→ Parse hierarchical tags
   └→ Delegate to TagService
@@ -111,19 +111,19 @@ TagfsUtilities.TagfsTagHandlerUtilities
 
 ## Core Components
 
-### 1. **CLI Layer (tagfs.py)**
+### 1. **CLI Layer (tagfs script & htfs/cli.py)**
 
-The CLI exposes commands for initialization, tag/resource management, expression queries, and filesystem diagnostics. Each handler obtains a `TagfsTagHandlerUtilities` instance, normalizes paths, parses hierarchical inputs, and delegates the heavy work to `TagService`.
+The CLI exposes commands for initialization, tag/resource management, expression queries, and filesystem diagnostics. Each handler obtains an `HTFS` instance, normalizes paths, parses hierarchical inputs, and delegates the heavy work to the `HTFS` library core.
 ---
 
-### 2. **Utilities Layer (TagfsUtilities.py)**
+### 2. **Library Core Layer (htfs/core.py)**
 
-`TagfsTagHandlerUtilities` maintains the tagfs boundary cache, normalizes resource URLs relative to that boundary, parses hierarchical tag syntax such as `Project/Alpha/Reports`, and exposes helpers like `add_tags`, `tag_resource`, `get_resources_by_tag_expr`, `link_tags`, and `is_resource_tracked`. It keeps the CLI boundary-aware while relying on `TagService` for persistence.
+The `HTFS` class maintains the tagfs boundary cache, normalizes resource URLs relative to that boundary, parses hierarchical tag syntax such as `Project/Alpha/Reports`, and exposes wrappers like `add_tags`, `tag_resource`, `get_resources_by_tag_expr`, `link_tags`, and `is_resource_tracked`. It serves as the primary external API.
 ---
 
-### 3. **High-Level Service Layer (TagService.py)**
+### 3. **High-Level Service Layer (htfs/tag_service.py)**
 
-`TagService` is the facade used by CLI utilities. It instantiates `DatabaseManager`, exposes CRUD operations for tags and resources, auto-creates missing tags when adding resource tags, computes closures, and exposes `flush`/`close` to persist RDF only when needed.
+`TagService` is the internal facade wrapped by the `HTFS` class. It instantiates `DatabaseManager`, exposes CRUD operations for tags and resources, auto-creates missing tags when adding resource tags, computes closures, and exposes `flush`/`close` to persist RDF only when needed.
 ---
 
 ### 4. **Storage Coordinator & Handlers**
@@ -152,7 +152,7 @@ Tokenizes tag expressions, builds an AST, and compiles SPARQL clauses that trave
 
 ### 6. **Filesystem Integration (tagfs_inotify_daemon.py)**
 
-The optional daemon monitors the tagfs boundary via `inotify.adapters.InotifyTree`. It captures `IN_MOVED_FROM`/`IN_MOVED_TO` pairs, uses `TagfsUtilities.move_resource()` to normalize the paths, and relies on `TagService` to update SQLite/RDF so resource IDs and their tag links follow the filesystem move.
+The optional daemon monitors the tagfs boundary via `inotify.adapters.InotifyTree`. It captures `IN_MOVED_FROM`/`IN_MOVED_TO` pairs, uses `htfs.move_resource()` to normalize the paths, and relies on `TagService` to update SQLite/RDF so resource IDs and their tag links follow the filesystem move.
 ---
 
 ### 7. **Data Migration (migrate_sql_to_rdf.py)**
@@ -232,46 +232,32 @@ Research (4)  [Independent branch]
 
 ### Python API
 
-#### TagService Interface
+### Python API
+
 ```python
-from TagService import TagService
-
-# Initialize
-ts = TagService(".tagfs.ttl")
-ts.initialize()
-
-# Tag operations
-ts.add_tag("Project")
-tag_id = ts.get_tag_id("Project")
-ts.link_tag("Alpha", "Project")  # Alpha is child of Project
-
-# Resource operations
-res_id = ts.add_resource("reports/result.pdf")
-ts.add_resource_tags("reports/result.pdf", ["Reports", "Research"])
-tags = ts.get_resource_tags("reports/result.pdf")
-resources = ts.get_resources_by_tag(["Project"])
-```
-
-#### QueryEvaluator Interface
-```python
-from QueryEvaluator import QueryEvaluator
-
-qe = QueryEvaluator(ts)
-results = qe.evaluate("(proj1|proj2)&research&~draft")
-# Returns list of resource URLs matching expression
-```
-
-#### Utilities Interface
-```python
-from TagfsUtilities import TagfsTagHandlerUtilities, get_tag_fs_boundary
+from htfs import HTFS, find_tagfs_boundary
 
 # Auto-detect tagfs boundary
-boundary = get_tag_fs_boundary()
+boundary = find_tagfs_boundary()
 
-# High-level utilities
-utils = TagfsTagHandlerUtilities(boundary)
-utils.add_tags(["Project/Alpha/Reports"])  # Hierarchical create
-resources = utils.get_resources_by_tag_expr("(proj1|proj2)&research")
+# Initialize API
+htfs = HTFS(boundary)
+htfs.initialize()
+
+# Add tags (supports hierarchical syntax)
+htfs.add_tags(["Project/Alpha/Reports", "Research"])
+
+# Rename tag
+htfs.rename_tag("Alpha", "Alpha_v1")
+
+# Track and tag resources
+htfs.add_resource("reports/result.pdf")
+htfs.tag_resource("reports/result.pdf", ["Reports", "Research"])
+
+# Queries
+tags = htfs.get_resource_tags("reports/result.pdf")
+resources = htfs.get_resources_by_tag(["Project"]) # Transitive closure
+expr_resources = htfs.get_resources_by_tag_expr("(proj1|proj2)&research")
 ```
 
 ### Command-Line Interface
@@ -344,7 +330,7 @@ _compile(AST) emits clauses that match
 **Step 4: Query Execution**
 RDFHandler executes the SPARQL against the in-memory graph and returns `htfs:resource_{id}` URIs. ASTEvaluator extracts the numeric IDs and queries SQLite (`DatabaseManager`) to fetch the normalized `URL` strings.
 
-**Step 5: Result Processing** (TagfsUtilities)
+**Step 5: Result Processing** (htfs/core.py)
 - Convert normalized URLs to absolute paths
 - Apply tagfs boundary
 - Return filesystem paths to the CLI caller
@@ -413,7 +399,7 @@ Expression → Tokenizer → Parser → AST → Compiler → SPARQL → Executor
 
 ### 4. **Command Pattern**
 
-**Implementation**: tagfs.py command handlers
+**Implementation**: htfs/cli.py command handlers
 
 **Benefit**: Decouples command parsing from execution
 
@@ -425,7 +411,9 @@ COMMANDS = {
     # ...
 }
 
-def tagfs(args):
+def main():
+    parser = create_parser()
+    args = parser.parse_args(sys.argv[1:])
     handler = COMMANDS[args.command]
     return handler(args)
 ```

@@ -5,7 +5,7 @@ Delegates to DatabaseManager which coordinates SQLite (ID lookups) and RDF (rela
 """
 
 import logging
-import DatabaseManager
+from htfs.database import DatabaseManager
 
 logobj = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class TagService:
         else:
             self.tagfs_boundary = db_path_or_boundary
 
-        self.db = DatabaseManager.DatabaseManager(self.tagfs_boundary)
+        self.db = DatabaseManager(self.tagfs_boundary)
         self.db.connect()
 
     def __del__(self):

@@ -8,7 +8,7 @@ Architecture:
 """
 
 import re
-from RDFHandler import HTFS
+from htfs.rdf_handler import HTFS
 from rdflib.namespace import SKOS
 
 # Module-level constants for Parser

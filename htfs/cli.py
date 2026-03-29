@@ -11,26 +11,29 @@ import shutil
 import logging
 import argparse
 
-import TagfsUtilities
+# Add parent directory to sys.path to allow standalone execution
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
+from htfs import HTFS, find_tagfs_boundary
 
 logging.basicConfig(level='INFO')
 logobj = logging.getLogger(__name__)
 
 
 def get_tagfs_utils():
-    """Get TagfsUtilities instance, searching for tagfs boundary."""
-    tagfs_boundary = TagfsUtilities.get_tag_fs_boundary()
+    """Get HTFS instance, searching for tagfs boundary."""
+    tagfs_boundary = find_tagfs_boundary()
 
     if tagfs_boundary is None:
         logobj.error('db not initialized')
         print_usage([])
         return None
-    th_utils = TagfsUtilities.TagfsTagHandlerUtilities(tagfs_boundary)
+    th_utils = HTFS(tagfs_boundary)
     return th_utils
 
 
 def _get_tag_fs_boundary(args):
-    tagfs_boundary = TagfsUtilities.get_tag_fs_boundary()
+    tagfs_boundary = find_tagfs_boundary()
     if tagfs_boundary is None:
         logobj.error('db not initialized')
         print_usage(args)
@@ -41,11 +44,11 @@ def _get_tag_fs_boundary(args):
 
 def _init_tag_fs(args):
     """Initialize a new tagfs database in the current directory."""
-    ts = TagfsUtilities.TagfsTagHandlerUtilities(os.path.realpath(os.curdir))
+    ts = HTFS(os.path.realpath(os.curdir))
     ts.initialize()
     ts.close()  # Ensure RDF is saved
 
-    if not os.path.exists(TagfsUtilities._tagfsdb):
+    if not os.path.exists(os.path.join(os.path.realpath(os.curdir), ".tagfs.db")):
         return 1
     logobj.info("initialized in " + os.path.realpath(os.curdir))
     return 0
@@ -248,7 +251,7 @@ def _unlink_tags(args):
     if th_utils is None:
         return 1
     try:
-        # Use TagService directly for unlink (not in TagfsUtilities)
+        # Use TagService directly for unlink
         ts = th_utils.th
         res = ts.unlink_tag(tag, parent_tag)
         if not res:
@@ -372,9 +375,9 @@ def create_parser():
     return parser
 
 
-def tagfs(arg):
+def main():
     parser = create_parser()
-    args = parser.parse_args(arg)
+    args = parser.parse_args(sys.argv[1:])
 
     if not args.command or args.command not in COMMANDS:
         code = improper_usage(args)
@@ -384,4 +387,4 @@ def tagfs(arg):
 
 
 if __name__ == "__main__":
-    tagfs(sys.argv[1:])
+    main()

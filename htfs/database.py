@@ -14,8 +14,8 @@ Key behaviors:
 
 import os
 import logging
-from SQLiteHandler import SQLiteManager, TagRepository as SQLTagRepo, ResourceRepository as SQLResRepo
-from RDFHandler import RDFHandler
+from htfs.sqlite_handler import SQLiteManager, TagRepository as SQLTagRepo, ResourceRepository as SQLResRepo
+from htfs.rdf_handler import RDFHandler
 
 logobj = logging.getLogger(__name__)
 

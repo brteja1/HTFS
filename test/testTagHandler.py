@@ -1,6 +1,6 @@
 import os
 import unittest
-from TagService import TagService
+from htfs.tag_service import TagService
 
 class TestTagService(unittest.TestCase):
     TEST_DB = "testdb.db.test"

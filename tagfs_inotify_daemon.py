@@ -11,7 +11,7 @@ import sys
 import logging
 import inotify.adapters
 
-import TagfsUtilities
+from htfs import HTFS, find_tagfs_boundary
 
 logging.basicConfig(level='INFO')
 logobj = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class TagfsInotifyDaemon:
     def __init__(self, tag_boundary_path):
         self.tag_boundary_path = tag_boundary_path
         self.eventlist = []
-        self.th_utils = TagfsUtilities.TagfsTagHandlerUtilities(tag_boundary_path)
+        self.th_utils = HTFS(tag_boundary_path)
 
     def close(self):
         """Clean up resources, flushing RDF to disk."""
@@ -90,7 +90,7 @@ class TagfsInotifyDaemon:
 
 
 if __name__ == '__main__':
-    path = sys.argv[1] if len(sys.argv) > 1 else TagfsUtilities.get_tag_fs_boundary()
+    path = sys.argv[1] if len(sys.argv) > 1 else find_tagfs_boundary()
     if path is None:
         logobj.error("tagfs not initialized in path")
         sys.exit(1)
