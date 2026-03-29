@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "htfs"
+version = "0.2.0"
+description = "Hierarchically Tagged File System"
+readme = "README.md"
+authors = [
+    {name = "HTFS Contributors"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "rdflib>=6.0"
+]
+requires-python = ">=3.7"
+
+[project.optional-dependencies]
+daemon = ["inotify"]
+
+[project.scripts]
+tagfs = "htfs.cli:main"
