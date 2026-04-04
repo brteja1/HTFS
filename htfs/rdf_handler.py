@@ -226,6 +226,14 @@ class RDFHandler:
         self.graph.remove((res_uri, HTFS.hasTag, None))
         self._mark_dirty()
 
+    def remove_all_links_for_tag(self, tag_id):
+        """Remove all RDF triples that mention a tag."""
+        self.connect()
+        tag_uri = self._tag_uri(tag_id)
+        self.graph.remove((tag_uri, None, None))
+        self.graph.remove((None, None, tag_uri))
+        self._mark_dirty()
+
     # -------------------------------------------------------------------------
     # Migration/Sync Helpers
     # -------------------------------------------------------------------------

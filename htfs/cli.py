@@ -98,6 +98,21 @@ def _rename_tag(args):
         th_utils.close()
 
 
+def _delete_tag(args):
+    tag_name = args.tag
+    th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
+    try:
+        res = th_utils.del_tag(tag_name)
+        if not res:
+            logobj.error("could not delete tag, check if tags are present in db")
+            return 1
+        return 0
+    finally:
+        th_utils.close()
+
+
 def _add_resource(args):
     resource_url = args.path
     th_utils = get_tagfs_utils()
@@ -270,6 +285,7 @@ def print_usage(args):
     print(cmd + " lstags [tag] \t\t list tags")
     print(cmd + " addtags [tag]* \t\t add new tags")
     print(cmd + " renametag tag newtag \t rename an existing tag")
+    print(cmd + " rmtag tag \t\t delete an existing tag")
     print(cmd + " linktags tag parenttag \t link existing tags")
     print(cmd + " unlinktags tag parenttag \t unlink existing tags")
     print(cmd + " addresource path \t\t track a new resource")
@@ -300,6 +316,7 @@ COMMANDS = {
     'lstags': _get_tags_list,
     'addtags': _add_tags,
     'renametag': _rename_tag,
+    'rmtag': _delete_tag,
     'linktags': _link_tags,
     'unlinktags': _unlink_tags,
     'addresource': _add_resource,
@@ -331,6 +348,9 @@ def create_parser():
     renametag_parser = subparsers.add_parser('renametag')
     renametag_parser.add_argument('tag')
     renametag_parser.add_argument('newtag')
+
+    rmtag_parser = subparsers.add_parser('rmtag')
+    rmtag_parser.add_argument('tag')
 
     linktags_parser = subparsers.add_parser('linktags')
     linktags_parser.add_argument('tag')

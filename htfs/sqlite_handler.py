@@ -149,6 +149,14 @@ class TagRepository:
         self.conn.commit()
         return True
 
+    def delete_tag(self, tag_id) -> bool:
+        """Delete a tag by ID."""
+        if tag_id < 0:
+            return False
+        cursor = self.conn.execute("DELETE FROM TAGS WHERE ID=?;", (tag_id,))
+        self.conn.commit()
+        return cursor.rowcount > 0
+
     def get_max_tag_id(self) -> int:
         """Get the current max tag ID from sequences."""
         cursor = self.conn.execute(

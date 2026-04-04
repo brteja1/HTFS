@@ -126,6 +126,10 @@ class HTFS:
         """Rename a tag."""
         return self.th.rename_tag(tag_name, new_tag_name)
 
+    def del_tag(self, tag_name):
+        """Delete a tag and remove all references to it."""
+        return self.th.del_tag(tag_name)
+
     def add_resource(self, resource_url):
         """Add a resource for tracking. Returns resource ID."""
         resource_url = self.normalize_url(resource_url)

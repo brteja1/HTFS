@@ -29,6 +29,7 @@ HTFS is an innovative file organization system that decouples tagging from tradi
 
 - **Hierarchical Tags**: Tags organized in multiple parent-child relationships forming a directed acyclic graph (DAG)
 - **Multi-tag Assignment**: Files and directories can have multiple tags across the hierarchy
+- **Tag Deletion**: Tags can be removed with `rmtag`, with RDF hierarchy and resource links cleaned up
 - **Transitive Queries**: Searching by parent tags automatically includes all children in results
 - **SPARQL-based Querying**: Complex tag expressions evaluated through RDF/SPARQL
 - **CLI-driven Workflow**: Command-line interface for scripting and automation
@@ -46,7 +47,8 @@ Unlike traditional folders (which form a strict tree hierarchy), HTFS tags form 
 ```
 ┌─────────────────────────────────────────────────────┐
 │                   CLI Layer (htfs/cli.py)           │
-│  Commands: init, lstags, addtags, linktags, etc.    │
+│  Commands: init, lstags, addtags, renametag, rmtag  │
+│             linktags, unlinktags, etc.              │
 └──────────────────┬──────────────────────────────────┘
                    │
 ┌──────────────────▼──────────────────────────────────┐
@@ -123,12 +125,12 @@ The `HTFS` class maintains the tagfs boundary cache, normalizes resource URLs re
 
 ### 3. **High-Level Service Layer (htfs/tag_service.py)**
 
-`TagService` is the internal facade wrapped by the `HTFS` class. It instantiates `DatabaseManager`, exposes CRUD operations for tags and resources, auto-creates missing tags when adding resource tags, computes closures, and exposes `flush`/`close` to persist RDF only when needed.
+`TagService` is the internal facade wrapped by the `HTFS` class. It instantiates `DatabaseManager`, exposes CRUD operations for tags and resources, auto-creates missing tags when adding resource tags, deletes tags by removing all related RDF links and SQLite rows, computes closures, and exposes `flush`/`close` to persist RDF only when needed.
 ---
 
 ### 4. **Storage Coordinator & Handlers**
 
-`DatabaseManager` orchestrates the SQLite and RDF storage layers. It initializes `.tagfs.db` (`TAGS`, `RESOURCES`, `ID_SEQUENCES`), routes identifier lookups to SQLite, and routes hierarchy/resource-tag management to `RDFHandler`. Bulk helpers such as `add_resource_tags`, `link_tag_to_parent`, and `get_resources_by_tag` combine lookups with RDF link creation, while `flush()`/`close()` serialize RDF only when modifications occur.
+`DatabaseManager` orchestrates the SQLite and RDF storage layers. It initializes `.tagfs.db` (`TAGS`, `RESOURCES`, `ID_SEQUENCES`), routes identifier lookups to SQLite, and routes hierarchy/resource-tag management to `RDFHandler`. Bulk helpers such as `add_resource_tags`, `link_tag_to_parent`, `delete_tag`, and `get_resources_by_tag` combine lookups with RDF link creation, while `flush()`/`close()` serialize RDF only when modifications occur.
 
 #### SQLite Handler
 
@@ -141,7 +143,7 @@ The `HTFS` class maintains the tagfs boundary cache, normalizes resource URLs re
 
 - Stores hierarchical relationships (`skos:broader`) and resource assignments (`htfs:hasTag`) in `.tagfs.ttl`
 - Lazily loads the `rdflib.Graph`, tracks a dirty flag, and serializes only on demand
-- Provides helpers like `add_tag_link`, `remove_tag_link`, `get_tag_closure_ids`, `add_resource_tag_link`, and `get_resources_by_tag_ids`
+- Provides helpers like `add_tag_link`, `remove_tag_link`, `remove_all_links_for_tag`, `get_tag_closure_ids`, `add_resource_tag_link`, and `get_resources_by_tag_ids`
 - QueryEvaluator executes SPARQL on this graph and maps each `htfs:resource_{id}` URI back to SQLite for the final normalized URL list
 ---
 
@@ -250,6 +252,9 @@ htfs.add_tags(["Project/Alpha/Reports", "Research"])
 # Rename tag
 htfs.rename_tag("Alpha", "Alpha_v1")
 
+# Delete tag
+htfs.del_tag("Alpha_v1")
+
 # Track and tag resources
 htfs.add_resource("reports/result.pdf")
 htfs.tag_resource("reports/result.pdf", ["Reports", "Research"])
@@ -272,6 +277,7 @@ tagfs addtags "Project/Alpha/Reports"  # Creates hierarchy
 tagfs linktags Research Project
 tagfs lstags
 tagfs renametag Alpha Alpha_v1
+tagfs rmtag Alpha_v1
 
 # Resource management
 tagfs addresource /data/file.pdf
@@ -347,6 +353,7 @@ RDFHandler executes the SPARQL against the in-memory graph and returns `htfs:res
 ### Serialization & Consistency
 
 - `RDFHandler` lazily loads `.tagfs.ttl`, marks the graph dirty on mutations, and serializes only during `close()`/`flush()` or when explicitly triggered. SQLite commits immediately, while RDF writes are batched for performance.
+- `rmtag` removes the tag from SQLite and deletes all RDF triples that mention the tag, preventing stale hierarchy or resource links from surviving tag deletion.
 - `ID_SEQUENCES` in SQLite guarantee that tag/resource IDs never collide, even when migration scripts rebuild the RDF graph from scratch.
 - The split model keeps high-throughput lookups in SQL and relationship/closure logic in RDF, avoiding large graphs by only storing links instead of repeated metadata.
 

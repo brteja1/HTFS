@@ -4,7 +4,7 @@ _tagfs_completions()
 {
   if [ "${#COMP_WORDS[@]}" == "2" ]; then
     # shellcheck disable=SC2207
-    COMPREPLY=($(compgen -W "init getboundary lstags addtags renametag linktags addresource tagresource untagresource lsresources rmresource mvresource getresourcetags rmresourcetags help" "${COMP_WORDS[1]}"))
+    COMPREPLY=($(compgen -W "init getboundary lstags addtags renametag rmtag linktags addresource tagresource untagresource lsresources rmresource mvresource getresourcetags rmresourcetags help" "${COMP_WORDS[1]}"))
   fi
 
   if [ "${#COMP_WORDS[@]}" == "3" ]; then
@@ -98,4 +98,3 @@ _tagfs_completions()
 
 complete -F _tagfs_completions tagfs
 complete -F _tagfs_completions tagfs.py
-

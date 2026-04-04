@@ -82,6 +82,10 @@ class TagService:
         """Rename a tag."""
         return self.db.rename_tag(tag_name, new_tag_name)
 
+    def del_tag(self, tag_name):
+        """Delete a tag and remove all associated links."""
+        return self.db.delete_tag(tag_name)
+
     def link_tag(self, tag_name, tag_parent_name):
         """
         Create a parent-child link between tags.

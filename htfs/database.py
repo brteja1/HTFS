@@ -108,6 +108,16 @@ class DatabaseManager:
         """Rename a tag."""
         return self.tag_repo.rename_tag(tag_name, new_tag_name)
 
+    def delete_tag(self, tag_name):
+        """Delete a tag and remove all hierarchy/resource links."""
+        tag_id = self.get_tag_id(tag_name)
+        if tag_id < 0:
+            return False
+
+        self.rdf.remove_all_links_for_tag(tag_id)
+        self._dirty = True
+        return self.tag_repo.delete_tag(tag_id)
+
     # -------------------------------------------------------------------------
     # Tag Hierarchy Operations (RDF)
     # -------------------------------------------------------------------------
