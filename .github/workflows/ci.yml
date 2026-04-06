@@ -27,4 +27,4 @@ jobs:
           pip install rdflib inotify
 
       - name: Run unit tests
-        run: cd test && python -m unittest test_database_manager test_cli_integration test_cli_end_to_end
+        run: cd test && python -m unittest discover -s . -p 'test_*.py'
