@@ -14,6 +14,7 @@ Key behaviors:
 
 import os
 import logging
+from pathlib import Path
 from htfs.sqlite_handler import SQLiteManager, TagRepository as SQLTagRepo, ResourceRepository as SQLResRepo
 from htfs.rdf_handler import RDFHandler
 
@@ -41,9 +42,9 @@ class DatabaseManager:
     """
 
     def __init__(self, tagfs_boundary):
-        self.tagfs_boundary = tagfs_boundary
-        self.db_path = os.path.join(tagfs_boundary, ".tagfs.db")
-        self.ttl_path = os.path.join(tagfs_boundary, ".tagfs.ttl")
+        self.tagfs_boundary = Path(tagfs_boundary).expanduser().resolve()
+        self.db_path = str(self.tagfs_boundary / ".tagfs.db")
+        self.ttl_path = str(self.tagfs_boundary / ".tagfs.ttl")
 
         self.sqlite = SQLiteManager(self.db_path)
         self.tag_repo = SQLTagRepo(self.sqlite)

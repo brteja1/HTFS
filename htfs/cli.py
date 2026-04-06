@@ -10,6 +10,7 @@ import sys
 import shutil
 import logging
 import argparse
+from pathlib import Path
 
 # Add parent directory to sys.path to allow standalone execution
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
@@ -44,13 +45,13 @@ def _get_tag_fs_boundary(args):
 
 def _init_tag_fs(args):
     """Initialize a new tagfs database in the current directory."""
-    ts = HTFS(os.path.realpath(os.curdir))
+    ts = HTFS(Path.cwd())
     ts.initialize()
     ts.close()  # Ensure RDF is saved
 
-    if not os.path.exists(os.path.join(os.path.realpath(os.curdir), ".tagfs.db")):
+    if not (Path.cwd() / ".tagfs.db").exists():
         return 1
-    logobj.info("initialized in " + os.path.realpath(os.curdir))
+    logobj.info("initialized in %s", Path.cwd())
     return 0
 
 
@@ -178,8 +179,8 @@ def _move_resource(args):
 
     src_is_file = os.path.isfile(resource_url)
     target_is_dir = os.path.isdir(target_url)
-    if target_is_dir & src_is_file:
-        target_url = target_url + os.sep + os.path.basename(resource_url)
+    if target_is_dir and src_is_file:
+        target_url = os.path.join(target_url, os.path.basename(resource_url))
 
     if make_fs_change:
         shutil.move(resource_url, target_url)

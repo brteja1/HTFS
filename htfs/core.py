@@ -7,6 +7,7 @@ Provides the HTFS class which is the public API for the library.
 import os
 import re
 import logging
+from pathlib import Path
 
 from htfs.query_evaluator import QueryEvaluator
 from htfs.tag_service import TagService
@@ -23,26 +24,17 @@ def find_tagfs_boundary(start_dir=''):
     Find the tagfs boundary by searching for .tagfs.db upward.
     Returns the directory path containing the tagfs database.
     """
-    if not start_dir:
-        start_dir = os.path.realpath(os.curdir)
-    tag_fs_db_file = os.path.join(start_dir, _tagfsdb)
-    tag_fs_db_file_path = start_dir
-    while True:
-        if os.path.exists(tag_fs_db_file):
-            return os.path.realpath(tag_fs_db_file_path)
-        else:
-            realpath = os.path.realpath(tag_fs_db_file_path)
-            if realpath == "/":
-                return None
-            elif re.fullmatch("[A-Z]:\\\\", realpath):
-                return None
-        tag_fs_db_file_path = os.path.pardir + os.path.sep + tag_fs_db_file_path
-        tag_fs_db_file = tag_fs_db_file_path + _tagfsdb
+    start_path = Path(start_dir or os.curdir).expanduser().resolve()
+    current = start_path if start_path.is_dir() else start_path.parent
+    for candidate in (current, *current.parents):
+        if (candidate / _tagfsdb).exists():
+            return str(candidate)
+    return None
 
 
 def is_hierarchical_tag(tag):
     """Check if tag contains hierarchical separator."""
-    return '/' not in tag
+    return '/' in tag
 
 
 def get_hierarchical_tag_split(tag):
@@ -62,9 +54,9 @@ class HTFS:
         """
         Initialize the HTFS tagging library at the specified boundary.
         """
-        self.tagfs_boundary = tagfs_boundary
-        tagsdb_file_path = os.path.join(tagfs_boundary, _tagfsdb)
-        self.th = TagService(tagsdb_file_path)
+        self.tagfs_boundary = Path(tagfs_boundary).expanduser().resolve()
+        tagsdb_file_path = self.tagfs_boundary / _tagfsdb
+        self.th = TagService(str(tagsdb_file_path))
 
     def close(self):
         """Close the database, flushing RDF to disk."""
@@ -76,14 +68,13 @@ class HTFS:
 
     def normalize_url(self, resource_url):
         """Normalize a resource URL to be relative to the tagfs boundary."""
-        normalized_url = os.path.relpath(os.path.realpath(resource_url), self.tagfs_boundary)
-        normalized_url = normalized_url.replace("\\", "/")
-        return normalized_url
+        resource_path = Path(resource_url).expanduser().resolve()
+        normalized_url = os.path.relpath(str(resource_path), str(self.tagfs_boundary))
+        return Path(normalized_url).as_posix()
 
     def full_url(self, normalized_resource_url):
         """Convert a normalized URL back to a full path."""
-        url = os.path.join(self.tagfs_boundary, normalized_resource_url)
-        return url
+        return str(self.tagfs_boundary / Path(normalized_resource_url))
 
     def get_tags_list(self, tags=None):
         """Get list of tags, optionally filtered by closure."""

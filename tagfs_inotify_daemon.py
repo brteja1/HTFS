@@ -9,7 +9,15 @@ Requires inotify (Linux only): pip install inotify
 import os
 import sys
 import logging
-import inotify.adapters
+from pathlib import Path
+
+try:
+    if sys.platform.startswith("linux"):
+        import inotify.adapters
+    else:
+        inotify = None
+except ImportError:
+    inotify = None
 
 from htfs import HTFS, find_tagfs_boundary
 
@@ -24,18 +32,20 @@ class TagfsInotifyDaemon:
     MOVED_DIR = 'MD'
 
     def __init__(self, tag_boundary_path):
-        self.tag_boundary_path = tag_boundary_path
+        self.tag_boundary_path = Path(tag_boundary_path).expanduser().resolve()
         self.eventlist = []
-        self.th_utils = HTFS(tag_boundary_path)
+        self.th_utils = HTFS(self.tag_boundary_path)
 
     def close(self):
         """Clean up resources, flushing RDF to disk."""
         self.th_utils.close()
 
     def run(self):
+        if inotify is None:
+            raise RuntimeError("tagfs inotify daemon is only available on Linux")
         logobj.info("Initializing inotify on path: %s", self.tag_boundary_path)
         try:
-            i = inotify.adapters.InotifyTree(self.tag_boundary_path)
+            i = inotify.adapters.InotifyTree(str(self.tag_boundary_path))
         except (PermissionError, OSError) as e:
             logobj.error("Failed to initialize inotify: %s", e)
             sys.exit(1)
@@ -54,7 +64,7 @@ class TagfsInotifyDaemon:
     def handle_event(self, event):
         """Route events to appropriate handlers."""
         ievent, type_names, path, filename = event
-        full_path = os.path.join(path, filename) if filename else path
+        full_path = Path(path) / filename if filename else Path(path)
 
         if 'IN_MOVED_FROM' in type_names:
             self.handle_moved_from(ievent, type_names, full_path)
@@ -74,7 +84,9 @@ class TagfsInotifyDaemon:
         """Match MOVED_FROM with MOVED_TO and update the database."""
         for e in self.eventlist[:]:
             event_cookie, dir_or_file, originalpath = e
-            if not movedpath.startswith(self.tag_boundary_path):
+            try:
+                movedpath.relative_to(self.tag_boundary_path)
+            except ValueError:
                 self.eventlist.remove(e)
                 continue
             if event_cookie == ievent.cookie:

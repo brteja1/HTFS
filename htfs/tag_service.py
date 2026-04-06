@@ -5,6 +5,7 @@ Delegates to DatabaseManager which coordinates SQLite (ID lookups) and RDF (rela
 """
 
 import logging
+from pathlib import Path
 from htfs.database import DatabaseManager
 
 logobj = logging.getLogger(__name__)
@@ -30,14 +31,14 @@ class TagService:
                                  If it ends with .db, it's treated as the db path.
                                  Otherwise, it's treated as the tagfs boundary.
         """
-        if db_path_or_boundary.endswith(".db"):
+        path = Path(db_path_or_boundary)
+        if path.suffix == ".db":
             # Direct path to SQLite db - derive boundary from it
-            import os
-            self.tagfs_boundary = os.path.dirname(db_path_or_boundary)
+            self.tagfs_boundary = path.parent
         else:
-            self.tagfs_boundary = db_path_or_boundary
+            self.tagfs_boundary = path
 
-        self.db = DatabaseManager(self.tagfs_boundary)
+        self.db = DatabaseManager(str(self.tagfs_boundary))
         self.db.connect()
 
     def __del__(self):

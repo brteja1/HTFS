@@ -6,16 +6,16 @@
 
 import sys
 import os
+from pathlib import Path
 
-#get path separator
-htfs_path = os.path.realpath('/home/raghub/github-archive/HTFS')
-sys.path.append(htfs_path)
+htfs_path = Path(__file__).resolve().parents[1]
+sys.path.append(str(htfs_path))
 
 import TagfsUtilities
 
 def get_tagfs_utils() :
     tagfs_boundary = TagfsUtilities.get_tag_fs_boundary()
-    if tagfs_boundary == None :
+    if tagfs_boundary is None:
         exit(1)
     th_utils = TagfsUtilities.TagfsTagHandlerUtilities(tagfs_boundary)
     return th_utils
@@ -29,8 +29,8 @@ def get_file_text(file_path):
     
     print(f"File path: {file_path}")
     
-    file = open(file_path)
-    return file.read()
+    with open(file_path, encoding="utf-8") as file:
+        return file.read()
 
 from transformers import pipeline
 

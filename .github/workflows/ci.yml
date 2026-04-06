@@ -11,6 +11,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: test
+    env:
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
       - uses: actions/checkout@v4
@@ -25,4 +30,4 @@ jobs:
           pip install rdflib inotify
 
       - name: Run unit tests
-        run: python -m unittest test.test_database_manager test.test_cli_integration test.test_cli_end_to_end
+        run: python -m unittest test_database_manager test_cli_integration test_cli_end_to_end
