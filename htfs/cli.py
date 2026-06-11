@@ -259,6 +259,22 @@ def _rm_resource_tags(args):
         th_utils.close()
 
 
+def _export_graph(args):
+    th_utils = get_tagfs_utils()
+    if th_utils is None:
+        return 1
+    try:
+        dot = th_utils.export_graphviz_dot()
+        if args.output:
+            with open(args.output, "w", encoding="utf-8") as fp:
+                fp.write(dot)
+        else:
+            print(dot)
+        return 0
+    finally:
+        th_utils.close()
+
+
 def _unlink_tags(args):
     """Unlink two tags (remove parent-child relationship)."""
     tag = args.tag
@@ -297,6 +313,7 @@ def print_usage(args):
     print(cmd + " rmresourcetags path \t remove all tags on the resource")
     print(cmd + " rmresource path \t\t untrack the resource in the db")
     print(cmd + " mvresource path newpath\t move resource to a new path")
+    print(cmd + " exportgraph [-o output.dot] \t export the HTFS graph as Graphviz DOT")
     return 0
 
 
@@ -328,6 +345,7 @@ COMMANDS = {
     'rmresourcetags': _rm_resource_tags,
     'rmresource': _del_resource,
     'mvresource': _move_resource,
+    'exportgraph': _export_graph,
     'sanitize': unimplemented_feature_error,
     'help': print_usage
 }
@@ -389,6 +407,9 @@ def create_parser():
     mvresource_parser.add_argument('path')
     mvresource_parser.add_argument('newpath')
     mvresource_parser.add_argument('makefschange', nargs='?', default='true')
+
+    exportgraph_parser = subparsers.add_parser('exportgraph')
+    exportgraph_parser.add_argument('-o', '--output', help='write DOT output to a file')
 
     sanitize_parser = subparsers.add_parser('sanitize')
     help_parser = subparsers.add_parser('help')

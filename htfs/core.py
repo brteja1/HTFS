@@ -176,3 +176,7 @@ class HTFS:
         """Get all tags assigned to a resource."""
         resource_url = self.normalize_url(resource_url)
         return self.th.get_resource_tags(resource_url)
+
+    def export_graphviz_dot(self):
+        """Export the HTFS graph as Graphviz DOT."""
+        return self.th.export_graphviz_dot()

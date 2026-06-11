@@ -48,7 +48,7 @@ Unlike traditional folders (which form a strict tree hierarchy), HTFS tags form 
 ┌─────────────────────────────────────────────────────┐
 │                   CLI Layer (htfs/cli.py)           │
 │  Commands: init, lstags, addtags, renametag, rmtag  │
-│             linktags, unlinktags, etc.              │
+│             linktags, unlinktags, exportgraph, etc. │
 └──────────────────┬──────────────────────────────────┘
                    │
 ┌──────────────────▼──────────────────────────────────┐
@@ -152,9 +152,9 @@ The `HTFS` class maintains the tagfs boundary cache, normalizes resource URLs re
 Tokenizes tag expressions, builds an AST, and compiles SPARQL clauses that traverse `htfs:hasTag` and `skos:broader*`. After the RDF query returns `htfs:resource_{id}` URIs, the ASTEvaluator extracts each numeric ID and asks SQLite for the normalized URL list so the CLI receives filesystem paths instead of RDF resources.
 ---
 
-### 6. **Filesystem Integration (tagfs_inotify_daemon.py)**
+### 6. **Filesystem Integration (htfs/daemon.py)**
 
-The optional daemon monitors the tagfs boundary via `inotify.adapters.InotifyTree`. It captures `IN_MOVED_FROM`/`IN_MOVED_TO` pairs, uses `htfs.move_resource()` to normalize the paths, and relies on `TagService` to update SQLite/RDF so resource IDs and their tag links follow the filesystem move.
+The optional `tagfs-daemon` monitors the tagfs boundary via `inotify.adapters.InotifyTree`. It captures `IN_MOVED_FROM`/`IN_MOVED_TO` pairs, uses `htfs.move_resource()` to normalize the paths, and relies on `TagService` to update SQLite/RDF so resource IDs and their tag links follow the filesystem move.
 ---
 
 ### 7. **Data Migration (migrate_sql_to_rdf.py)**
@@ -288,6 +288,7 @@ tagfs lsresources "(proj1|proj2)&research"
 # Filesystem operations
 tagfs mvresource /data/file.pdf /data/new/file.pdf
 tagfs rmresource /data/file.pdf
+tagfs exportgraph -o graph.dot
 
 # Utilities
 tagfs getboundary
@@ -415,6 +416,7 @@ COMMANDS = {
     'init': _init_tag_fs,
     'addtags': _add_tags,
     'lsresources': _get_resources_by_tag_expr,
+    'exportgraph': _export_graph,
     # ...
 }
 
@@ -427,7 +429,7 @@ def main():
 
 ### 5. **Observer Pattern** (Optional)
 
-**Implementation**: tagfs_inotify_daemon.py
+**Implementation**: `tagfs-daemon` (htfs/daemon.py)
 
 **Benefit**: Monitors filesystem and reacts to changes
 
@@ -552,7 +554,7 @@ tagfs lsresources "ProjectAlpha&(Design|Development)"  # Alpha design and dev fi
 
 ```bash
 # Start daemon in background
-tagfs_inotify_daemon.py /my/data &
+tagfs-daemon /my/data &
 
 # Manually tag once
 tagfs addresource /my/data/important.pdf
@@ -712,7 +714,7 @@ The system balances **semantic richness** (RDF/SKOS ontology) with **practical u
 ### C. Dependencies
 
 - **rdflib** (>= 6.0): RDF graph management
-- **inotify** (optional): Filesystem event monitoring (Linux only)
+- **inotify** (optional): Filesystem event monitoring (Linux only). Install via `pip install ".[daemon]"`
 
 ### D. File Formats
 

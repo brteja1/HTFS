@@ -210,6 +210,63 @@ class DatabaseManager:
         """Get all resource-tag links."""
         return self.rdf.get_all_resource_tag_links()
 
+    def export_graphviz_dot(self):
+        """
+        Export the current HTFS graph in Graphviz DOT format.
+
+        The DOT graph includes:
+          - all tags from SQLite as tag nodes
+          - all resources from SQLite as resource nodes
+          - hierarchy edges from RDF (parent -> child)
+          - resource assignment edges from RDF (resource -> tag)
+        """
+        def escape_dot_label(value):
+            return (
+                str(value)
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+            )
+
+        self.connect()
+
+        tag_ids = self.tag_repo.get_tag_ids()
+        resource_ids = self.res_repo.get_resource_ids()
+        tag_links = self.rdf.get_all_tag_links()
+        resource_links = self.rdf.get_all_resource_tag_links()
+
+        lines = [
+            "digraph htfs {",
+            '  graph [rankdir=LR, splines=true, overlap=false];',
+            '  node [fontname="Helvetica"];',
+            '  edge [fontname="Helvetica"];',
+        ]
+
+        for tag_id in tag_ids:
+            tag_name = self.get_tag_name(tag_id)
+            if not tag_name:
+                continue
+            lines.append(
+                f'  "tag_{tag_id}" [label="{escape_dot_label(tag_name)}", shape=box];'
+            )
+
+        for resource_id in resource_ids:
+            resource_url = self.get_resource_url(resource_id)
+            if not resource_url:
+                continue
+            lines.append(
+                f'  "resource_{resource_id}" [label="{escape_dot_label(resource_url)}", shape=ellipse];'
+            )
+
+        for child_id, parent_id in tag_links:
+            lines.append(f'  "tag_{parent_id}" -> "tag_{child_id}" [label="broader"];')
+
+        for resource_id, tag_id in resource_links:
+            lines.append(f'  "resource_{resource_id}" -> "tag_{tag_id}" [label="hasTag"];')
+
+        lines.append("}")
+        return "\n".join(lines)
+
     # -------------------------------------------------------------------------
     # Bulk Operations (for sync/migration)
     # -------------------------------------------------------------------------

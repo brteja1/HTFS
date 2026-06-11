@@ -200,3 +200,7 @@ class TagService:
         Returns list of resource URLs.
         """
         return self.db.get_resources_by_tags(tags)
+
+    def export_graphviz_dot(self):
+        """Export the HTFS graph as Graphviz DOT."""
+        return self.db.export_graphviz_dot()
