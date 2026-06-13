@@ -138,28 +138,39 @@ class ASTEvaluator:
             var = self._next_var()
             return f"?resource htfs:hasTag {var} .\n{var} skos:broader* {tag_uri} .\n"
 
-    def eval(self, node: ASTNode) -> list:
+    def eval(self, node: ASTNode, count: bool = False):
         self._var_counter = 0
         pattern = self._compile(node)
-        query = f"""
-        SELECT DISTINCT ?resource WHERE {{
-            {pattern}
-        }}
-        """
-        results = self.g.query(query, initNs={"htfs": HTFS, "skos": SKOS})
-        resource_urls = []
-        seen = set()
-        for row in results:
-            resource_uri = str(row.resource)
-            try:
-                resource_id = int(resource_uri.split("_")[-1])
-            except (ValueError, IndexError):
-                continue
-            url = self.db.get_resource_url(resource_id)
-            if url and url not in seen:
-                seen.add(url)
-                resource_urls.append(url)
-        return resource_urls
+        if count:
+            query = f"""
+            SELECT (COUNT(DISTINCT ?resource) AS ?count) WHERE {{
+                {pattern}
+            }}
+            """
+            results = self.g.query(query, initNs={"htfs": HTFS, "skos": SKOS})
+            for row in results:
+                return int(row[0])
+            return 0
+        else:
+            query = f"""
+            SELECT DISTINCT ?resource WHERE {{
+                {pattern}
+            }}
+            """
+            results = self.g.query(query, initNs={"htfs": HTFS, "skos": SKOS})
+            resource_urls = []
+            seen = set()
+            for row in results:
+                resource_uri = str(row.resource)
+                try:
+                    resource_id = int(resource_uri.split("_")[-1])
+                except (ValueError, IndexError):
+                    continue
+                url = self.db.get_resource_url(resource_id)
+                if url and url not in seen:
+                    seen.add(url)
+                    resource_urls.append(url)
+            return resource_urls
 
 
 class QueryEvaluator:
@@ -174,10 +185,10 @@ class QueryEvaluator:
     def __init__(self, th):
         self.th = th
 
-    def evaluate(self, expression: str) -> list:
+    def evaluate(self, expression: str, count: bool = False) -> list:
         tokens = Tokenizer.tokenize(expression)
         parser = Parser(tokens)
         ast = parser.parse()
         evaluator = ASTEvaluator(self.th)
-        result_urls = evaluator.eval(ast)
-        return result_urls
+        return evaluator.eval(ast, count=count)
+

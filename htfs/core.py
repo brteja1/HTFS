@@ -162,9 +162,11 @@ class HTFS:
         resource_urls = self.th.get_resources_by_tag(tags_closure)
         return [self.full_url(url) for url in resource_urls]
 
-    def get_resources_by_tag_expr(self, tagsexpr):
+    def get_resources_by_tag_expr(self, tagsexpr, count=False):
         """Get resources matching a tag expression (e.g., '(proj1|proj2)&research')."""
         qe = QueryEvaluator(self.th)
+        if count:
+            return qe.evaluate(tagsexpr, count=True)
         resource_urls = qe.evaluate(tagsexpr)
         return [self.full_url(url) for url in resource_urls]
 

@@ -201,9 +201,13 @@ def _get_resources_by_tag_expr(args):
     if th_utils is None:
         return 1
     try:
-        resource_urls = th_utils.get_resources_by_tag_expr(tagsexpr)
-        for res_url in resource_urls:
-            print(res_url)
+        if args.count:
+            count = th_utils.get_resources_by_tag_expr(tagsexpr, count=True)
+            print(count)
+        else:
+            resource_urls = th_utils.get_resources_by_tag_expr(tagsexpr)
+            for res_url in resource_urls:
+                print(res_url)
         return 0
     finally:
         th_utils.close()
@@ -391,6 +395,7 @@ def create_parser():
     untagresource_parser.add_argument('tags', nargs='+')
 
     lsresources_parser = subparsers.add_parser('lsresources')
+    lsresources_parser.add_argument('--count', '-c', action='store_true', help='show the count of resources, instead of the resources list')
     lsresources_parser.add_argument('tagexpr')
 
     getresourcetags_parser = subparsers.add_parser('getresourcetags')
