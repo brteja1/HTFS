@@ -179,16 +179,8 @@ class TagService:
         return self.db.add_resource_tags(resource_url, tags)
 
     def del_resource_tags(self, resource_url, tags):
-        """Remove tags from a resource."""
-        res_id = self.db.get_resource_id(resource_url)
-        if res_id < 0:
-            logobj.error("resource not tracked: %s", resource_url)
-            return
-
-        for tag in tags:
-            tag_id = self.db.get_tag_id(tag)
-            if tag_id > 0:
-                self.db.remove_resource_tag_link(res_id, tag_id)
+        """Remove tags from a resource. Returns list of unsuccessful tag names."""
+        return self.db.del_resource_tags(resource_url, tags)
 
     def get_resource_tags(self, resource_url):
         """Get all tag names for a resource."""

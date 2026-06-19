@@ -148,7 +148,7 @@ class HTFS:
     def untag_resource(self, resource_url, tags):
         """Remove tags from a resource."""
         resource_url = self.normalize_url(resource_url)
-        self.th.del_resource_tags(resource_url, tags)
+        return self.th.del_resource_tags(resource_url, tags)
 
     def move_resource(self, resource_url, target_url):
         """Move a resource to a new path."""

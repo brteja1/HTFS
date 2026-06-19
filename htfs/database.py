@@ -145,6 +145,37 @@ class DatabaseManager:
         """Get transitive closure: given tag IDs, return all descendant IDs."""
         return self.rdf.get_tag_closure_ids(tag_ids)
 
+    def _resolve_tag_spec(self, tag_spec, create_missing_flat=False):
+        """
+        Resolve a tag specification to a concrete tag ID.
+
+        Flat tags resolve directly by name. Hierarchical specs must match an
+        existing parent-child chain exactly.
+        """
+        if "/" not in tag_spec:
+            tag_id = self.get_tag_id(tag_spec)
+            if tag_id > 0 or not create_missing_flat:
+                return tag_id
+            return self.add_tag(tag_spec)
+
+        parts = tag_spec.split("/")
+        if any(part == "" for part in parts):
+            return -1
+
+        tag_id = self.get_tag_id(parts[0])
+        if tag_id < 0:
+            return -1
+
+        for part in parts[1:]:
+            child_id = self.get_tag_id(part)
+            if child_id < 0:
+                return -1
+            if child_id not in self.get_child_tag_ids(tag_id):
+                return -1
+            tag_id = child_id
+
+        return tag_id
+
     # -------------------------------------------------------------------------
     # Resource Operations (SQLite)
     # -------------------------------------------------------------------------
@@ -286,7 +317,8 @@ class DatabaseManager:
     def add_resource_tags(self, resource_url, tag_names):
         """
         Add tags to a resource by name.
-        Creates tags if they don't exist.
+        Creates flat tags if they don't exist.
+        Hierarchical specs must already exist and match the stored hierarchy.
         Returns list of unsuccessful tag names.
         """
         unsuccessful = []
@@ -296,18 +328,12 @@ class DatabaseManager:
             return tag_names  # All unsuccessful
 
         for tag_name in tag_names:
-            if "/" in tag_name:
-                logobj.error("hierarchical tag paths are not allowed when tagging resources: %s", tag_name)
+            tag_id = self._resolve_tag_spec(tag_name, create_missing_flat=True)
+            if tag_id < 0:
+                logobj.error("invalid tag specification for tagging resources: %s", tag_name)
                 unsuccessful.append(tag_name)
                 continue
 
-            tag_id = self.get_tag_id(tag_name)
-            if tag_id < 0:
-                # Auto-create the tag
-                tag_id = self.add_tag(tag_name)
-                if tag_id < 0:
-                    unsuccessful.append(tag_name)
-                    continue
             # Add link via RDF
             self.add_resource_tag_link(res_id, tag_id)
 
@@ -320,6 +346,36 @@ class DatabaseManager:
             return []
         tag_ids = self.get_resource_tag_ids(res_id)
         return [self.get_tag_name(tid) for tid in tag_ids if self.get_tag_name(tid)]
+
+    def del_resource_tags(self, resource_url, tag_names):
+        """
+        Remove tags from a resource.
+
+        Flat tags are removed if they exist; hierarchical specs must match an
+        existing parent-child chain exactly.
+        Returns list of unsuccessful tag names.
+        """
+        unsuccessful = []
+        res_id = self.get_resource_id(resource_url)
+        if res_id < 0:
+            logobj.error("resource not tracked: %s", resource_url)
+            return tag_names
+
+        for tag_name in tag_names:
+            if "/" not in tag_name:
+                tag_id = self.get_tag_id(tag_name)
+                if tag_id < 0:
+                    continue
+            else:
+                tag_id = self._resolve_tag_spec(tag_name, create_missing_flat=False)
+                if tag_id < 0:
+                    logobj.error("invalid tag specification for untagging resources: %s", tag_name)
+                    unsuccessful.append(tag_name)
+                    continue
+
+            self.remove_resource_tag_link(res_id, tag_id)
+
+        return unsuccessful
 
     def get_resources_by_tags(self, tag_names):
         """

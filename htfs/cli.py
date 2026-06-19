@@ -151,9 +151,13 @@ def _tag_resource(args):
     if th_utils is None:
         return 1
     try:
+        if not th_utils.is_resource_tracked(resource_url):
+            logobj.error("resource not tracked")
+            return 1
         unsuccessful_tags = th_utils.tag_resource(resource_url, tags)
         if len(unsuccessful_tags) > 0:
-            logobj.warning("following tags not in db " + str(unsuccessful_tags))
+            logobj.error("invalid tags: " + str(unsuccessful_tags))
+            return 1
         return 0
     finally:
         th_utils.close()
@@ -166,7 +170,13 @@ def _untag_resource(args):
     if th_utils is None:
         return 1
     try:
-        th_utils.untag_resource(resource_url, tags)
+        if not th_utils.is_resource_tracked(resource_url):
+            logobj.error("resource not tracked")
+            return 1
+        unsuccessful_tags = th_utils.untag_resource(resource_url, tags)
+        if len(unsuccessful_tags) > 0:
+            logobj.error("invalid tags: " + str(unsuccessful_tags))
+            return 1
         return 0
     finally:
         th_utils.close()

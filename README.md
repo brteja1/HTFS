@@ -73,6 +73,7 @@ HTFS stores tag metadata separately from the filesystem hierarchy, enabling:
    tagfs tagresource ./file.pdf Design Research
    tagfs untagresource ./file.pdf Design Research
    ```
+   Hierarchical resource tags must already exist as valid tag paths. If the hierarchy is incomplete or incorrect, the command fails with an invalid tag error.
 
 4. **Query**:
    ```bash
