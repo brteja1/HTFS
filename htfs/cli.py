@@ -164,8 +164,11 @@ def _tag_resource(args):
 
 
 def _untag_resource(args):
+    return _remove_resource_tags(args, remove_all=args.all)
+
+
+def _remove_resource_tags(args, remove_all=False):
     resource_url = args.path
-    tags = args.tags
     th_utils = get_tagfs_utils()
     if th_utils is None:
         return 1
@@ -173,6 +176,13 @@ def _untag_resource(args):
         if not th_utils.is_resource_tracked(resource_url):
             logobj.error("resource not tracked")
             return 1
+        if remove_all:
+            tags = th_utils.get_resource_tags(resource_url)
+        else:
+            tags = args.tags
+            if not tags:
+                logobj.error("no tags specified")
+                return 1
         unsuccessful_tags = th_utils.untag_resource(resource_url, tags)
         if len(unsuccessful_tags) > 0:
             logobj.error("invalid tags: " + str(unsuccessful_tags))
@@ -257,20 +267,7 @@ def _get_resource_tags(args):
 
 
 def _rm_resource_tags(args):
-    resource_url = args.path
-    th_utils = get_tagfs_utils()
-    if th_utils is None:
-        return 1
-    try:
-        if not th_utils.is_resource_tracked(resource_url):
-            logobj.error("resource not tracked")
-            return 1
-        tags = th_utils.get_resource_tags(resource_url)
-        th_utils.untag_resource(resource_url, tags)
-        logobj.info("removed tags " + str(tags) + " on the resource")
-        return 0
-    finally:
-        th_utils.close()
+    return _remove_resource_tags(args, remove_all=True)
 
 
 def _export_graph(args):
@@ -321,10 +318,10 @@ def print_usage(args):
     print(cmd + " unlinktags tag parenttag \t unlink existing tags")
     print(cmd + " addresource path \t\t track a new resource")
     print(cmd + " tagresource path [tag]* \t add tags to tracked resources")
-    print(cmd + " untagresource path [tag]* \t remove tags on tracked resources")
+    print(cmd + " untagresource path [tag]* [--all] \t remove tags on tracked resources")
     print(cmd + " lsresources tagexpr \t list resources with given tags")
     print(cmd + " getresourcetags path \t list all the tags of the resource")
-    print(cmd + " rmresourcetags path \t remove all tags on the resource")
+    print(cmd + " rmresourcetags path \t legacy alias for untagresource --all")
     print(cmd + " rmresource path \t\t untrack the resource in the db")
     print(cmd + " mvresource path newpath\t move resource to a new path")
     print(cmd + " exportgraph [-o output.dot] \t export the HTFS graph as Graphviz DOT")
@@ -402,7 +399,8 @@ def create_parser():
 
     untagresource_parser = subparsers.add_parser('untagresource')
     untagresource_parser.add_argument('path')
-    untagresource_parser.add_argument('tags', nargs='+')
+    untagresource_parser.add_argument('tags', nargs='*')
+    untagresource_parser.add_argument('--all', action='store_true')
 
     lsresources_parser = subparsers.add_parser('lsresources')
     lsresources_parser.add_argument('--count', '-c', action='store_true', help='show the count of resources, instead of the resources list')

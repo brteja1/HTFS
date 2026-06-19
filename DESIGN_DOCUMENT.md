@@ -283,10 +283,12 @@ tagfs rmtag Alpha_v1
 tagfs addresource /data/file.pdf
 tagfs tagresource /data/file.pdf Reports Research
 tagfs untagresource /data/file.pdf Reports Research
+tagfs untagresource /data/file.pdf --all
 tagfs getresourcetags /data/file.pdf
 tagfs lsresources "(proj1|proj2)&research"
 
 For `tagresource` and `untagresource`, hierarchical tag specs are accepted only when the exact tag path already exists in the hierarchy. Invalid or incomplete paths return an error and do not change resource links.
+`rmresourcetags` is retained only as a legacy alias for `untagresource --all`.
 
 # Filesystem operations
 tagfs mvresource /data/file.pdf /data/new/file.pdf
