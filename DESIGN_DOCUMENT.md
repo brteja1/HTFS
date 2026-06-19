@@ -264,6 +264,7 @@ tags = htfs.get_resource_tags("reports/result.pdf")
 resources = htfs.get_resources_by_tag(["Project"]) # Transitive closure
 expr_resources = htfs.get_resources_by_tag_expr("(proj1|proj2)&research")
 ```
+Use `addtags` to create a hierarchy path. Use `linktags` only when both tags already exist and you want an extra parent-child edge.
 
 ### Command-Line Interface
 
@@ -273,8 +274,8 @@ tagfs init
 
 # Tag management
 tagfs addtags Project Alpha Beta
-tagfs addtags "Project/Alpha/Reports"  # Creates hierarchy
-tagfs linktags Research Project
+tagfs addtags "Project/Alpha/Reports"  # Creates hierarchy path
+tagfs linktags Research Project        # Adds a second parent to Research
 tagfs lstags
 tagfs renametag Alpha Alpha_v1
 tagfs rmtag Alpha_v1
@@ -287,9 +288,6 @@ tagfs untagresource /data/file.pdf --all
 tagfs getresourcetags /data/file.pdf
 tagfs lsresources "(proj1|proj2)&research"
 
-For `tagresource` and `untagresource`, hierarchical tag specs are accepted only when the exact tag path already exists in the hierarchy. Invalid or incomplete paths return an error and do not change resource links.
-`rmresourcetags` is retained only as a legacy alias for `untagresource --all`.
-
 # Filesystem operations
 tagfs mvresource /data/file.pdf /data/new/file.pdf
 tagfs rmresource /data/file.pdf
@@ -299,6 +297,9 @@ tagfs exportgraph -o graph.dot
 tagfs getboundary
 tagfs help
 ```
+
+For `tagresource` and `untagresource`, hierarchical tag specs are accepted only when the exact tag path already exists in the hierarchy. Invalid or incomplete paths return an error and do not change resource links.
+`rmresourcetags` is retained only as a legacy alias for `untagresource --all`.
 
 ---
 
@@ -541,8 +542,8 @@ tagfs addtags "Project/ProjectAlpha/Design"
 tagfs addtags "Project/ProjectAlpha/Development"
 tagfs addtags "Project/ProjectBeta/Planning"
 
-tagfs linktags Visibility/Internal Project
-tagfs linktags Visibility/Client Project
+tagfs linktags Visibility/Internal Project      # Internal now also sits under Project
+tagfs linktags Visibility/Client Project        # Client now also sits under Project
 
 # Tagging files
 tagfs tagresource ./docs/alpha_spec.pdf ProjectAlpha Design Internal Active

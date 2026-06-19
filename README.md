@@ -59,12 +59,13 @@ HTFS stores tag metadata separately from the filesystem hierarchy, enabling:
 
 2. **Manage Tags**:
    ```bash
-   # Create tags with hierarchy (using / as separator)
+   # Create a hierarchy path
    tagfs addtags "Project/Alpha/Design" "Project/Alpha/Development"
 
-   # Link existing tags
+   # Add an extra parent to an existing tag
    tagfs linktags "Research" "Project"
    ```
+   Use `addtags` when you want HTFS to create the hierarchy path for you. Use `linktags` when both tags already exist and you only want to add another parent-child relationship.
 
 3. **Tag Resources**:
    ```bash
