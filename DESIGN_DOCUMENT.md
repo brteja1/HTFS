@@ -282,6 +282,7 @@ tagfs rmtag Alpha_v1
 # Resource management
 tagfs addresource /data/file.pdf
 tagfs tagresource /data/file.pdf Reports Research
+tagfs untagresource /data/file.pdf Reports Research
 tagfs getresourcetags /data/file.pdf
 tagfs lsresources "(proj1|proj2)&research"
 
@@ -495,6 +496,7 @@ tagfs addresource ~/papers/quantum_entanglement_2024.pdf
 # Tag resources
 tagfs tagresource ~/papers/crispr_2025.pdf Genetics Reading 2025
 tagfs tagresource ~/papers/quantum_entanglement_2024.pdf Quantum ToRead 2024
+tagfs untagresource ~/papers/crispr_2025.pdf Reading 2025
 
 # Queries
 tagfs lsresources "Science&2025"                    # Papers in 2025 under Science
@@ -541,6 +543,7 @@ tagfs linktags Visibility/Client Project
 # Tagging files
 tagfs tagresource ./docs/alpha_spec.pdf ProjectAlpha Design Internal Active
 tagfs tagresource ./code/beta_prototype.py ProjectBeta Planning OnHold
+tagfs untagresource ./docs/alpha_spec.pdf Internal Active
 
 # Queries
 tagfs lsresources "Project&Active"                     # All active project files
@@ -559,6 +562,7 @@ tagfs-daemon /my/data &
 # Manually tag once
 tagfs addresource /my/data/important.pdf
 tagfs tagresource /my/data/important.pdf ImportantDocs
+tagfs untagresource /my/data/important.pdf ImportantDocs
 
 # Move file - daemon automatically updates URL
 mv /my/data/important.pdf /my/data/archive/important.pdf

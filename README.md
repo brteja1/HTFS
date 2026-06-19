@@ -71,6 +71,7 @@ HTFS stores tag metadata separately from the filesystem hierarchy, enabling:
    # Track and tag a file
    tagfs addresource ./file.pdf
    tagfs tagresource ./file.pdf Design Research
+   tagfs untagresource ./file.pdf Design Research
    ```
 
 4. **Query**:

@@ -311,7 +311,7 @@ def print_usage(args):
     print(cmd + " unlinktags tag parenttag \t unlink existing tags")
     print(cmd + " addresource path \t\t track a new resource")
     print(cmd + " tagresource path [tag]* \t add tags to tracked resources")
-    print(cmd + " untagresource path [tag] \t remove tags on tracked resources")
+    print(cmd + " untagresource path [tag]* \t remove tags on tracked resources")
     print(cmd + " lsresources tagexpr \t list resources with given tags")
     print(cmd + " getresourcetags path \t list all the tags of the resource")
     print(cmd + " rmresourcetags path \t remove all tags on the resource")
