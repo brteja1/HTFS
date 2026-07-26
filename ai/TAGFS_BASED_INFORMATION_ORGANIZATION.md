@@ -4,7 +4,7 @@ This document outlines the guidelines for AI agents regarding information organi
 
 ## 1. Information Organization & Expansion
 
-*   **Tag-based Documentation**: When introducing new concepts, create a chapter in `wiki/`, register it with `/linuxdev/github/HTFS/bin/tagfs addresource <path>`, and add appropriate tags with `/linuxdev/github/HTFS/bin/tagfs tagresource <path> <tags...>`.
+*   **Tag-based Documentation**: When introducing new concepts, create a chapter in `wiki/`, register it with `/path/to/HTFS/bin/tagfs addresource <path>`, and add appropriate tags with `/path/to/HTFS/bin/tagfs tagresource <path> <tags...>`.
 *   **Knowledge Base Expansion**: If a user's query cannot be answered using the local `wiki/` pages and requires searching the source code or the web, you must summarize the newly discovered information into a new `wiki/` page. Register and tag this new page using `tagfs` so that future queries on the topic can be answered locally.
 
 ## 2. Query Expectations
